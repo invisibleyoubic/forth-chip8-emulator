@@ -23,6 +23,9 @@ VARIABLE VDReg
 VARIABLE VEReg
 VARIABLE VFREg
 
+VARIABLE DT
+VARIABLE ST
+
 \ 2048 symbols
 \ 64 x 32
 CREATE frame-buffer 2048 ALLOT
@@ -35,6 +38,27 @@ VARIABLE drw-y
 : 12-rightmost
     \ 0x0FFF
     DUP 4095 AND
+;
+
+: V-register-address ( num -- addr )
+    CASE
+        0  OF V0Reg ENDOF
+        1  OF V1Reg ENDOF
+        2  OF V2Reg ENDOF
+        3  OF V3Reg ENDOF
+        4  OF V4Reg ENDOF
+        5  OF V5Reg ENDOF
+        6  OF V6Reg ENDOF
+        7  OF V7Reg ENDOF
+        8  OF V8Reg ENDOF
+        9  OF V9Reg ENDOF
+        10 OF VAReg ENDOF
+        11 OF VBReg ENDOF
+        12 OF VCReg ENDOF
+        13 OF VDReg ENDOF
+        14 OF VEReg ENDOF
+        15 OF VFReg ENDOF
+    ENDCASE
 ;
 
 : call-jump
@@ -51,30 +75,31 @@ VARIABLE drw-y
 ;
 
 : call-LDV
-    \ 0x0F00
-    DUP 3840 AND 8 RSHIFT
+    \ 0x00FF
+    DUP 255 AND SWAP
 
-    HEX
-    CR ." DEBUG: V register number: " DUP .
-    DECIMAL
+    \ 0x0F00
+    3840 AND 8 RSHIFT
+    V-register-address !
+;
+
+: call-FResolve
+    \ 0x0F00
+    DUP 3840 AND 8 RSHIFT SWAP
+
+    \ 0x00FF
+    255 AND
 
     CASE
-        0  OF 255 AND V0Reg ! ENDOF
-        1  OF 255 AND V1Reg ! ENDOF
-        2  OF 255 AND V2Reg ! ENDOF
-        3  OF 255 AND V3Reg ! ENDOF
-        4  OF 255 AND V4Reg ! ENDOF
-        5  OF 255 AND V5Reg ! ENDOF
-        6  OF 255 AND V6Reg ! ENDOF
-        7  OF 255 AND V7Reg ! ENDOF
-        8  OF 255 AND V8Reg ! ENDOF
-        9  OF 255 AND V9Reg ! ENDOF
-        10 OF 255 AND VAReg ! ENDOF
-        11 OF 255 AND VBReg ! ENDOF
-        12 OF 255 AND VCReg ! ENDOF
-        13 OF 255 AND VDReg ! ENDOF
-        14 OF 255 AND VEReg ! ENDOF
-        15 OF 255 AND VFReg ! ENDOF
+        7   OF DT @ SWAP V-register-address ! ENDOF
+        10  OF ." Wait for a key. Not implemented" ENDOF
+        21  OF V-register-address @ DT ! ENDOF
+        24  OF V-register-address @ ST ! ENDOF
+        30  OF V-register-address @ I0Reg @ + I0Reg ! ENDOF
+        41  OF ." Set I to location of sprite of Vx. Not implemented" ENDOF
+        51  OF ." Store hundreds in I, tens in I+1 and ones in I+2. Not implemented" ENDOF
+        85  OF ." Copy values from V0 to VX to address of I. Not implemented" ENDOF
+        101 OF ." Read values from address of I to V0 to VX. Not implemented" ENDOF
     ENDCASE
 ;
 
@@ -216,7 +241,7 @@ VARIABLE drw-y
         12 OF CR ." C Prefix - not implemented" ENDOF
         13 OF 12-rightmost call-DRV PC @ 2 + PC ! DROP ENDOF
         14 OF CR ." E Prefix - not implemented" ENDOF
-        15 OF CR ." F Prefix - not implemented" ENDOF
+        15 OF 12-rightmost call-FResolve PC @ 2 + PC ! DROP ENDOF
     ENDCASE
 ;
 
@@ -227,7 +252,7 @@ VARIABLE drw-y
 ;
 
 : to-big-endian-opcode
-    opcode-buffer to-big-endian 
+    opcode-buffer to-big-endian
     opcode-buffer !
 ;
 
@@ -239,7 +264,7 @@ VARIABLE drw-y
     2 <> THROW
 ;
 
-: print-registers 
+: print-registers
     CR ." DEBUG: I0:" 5 SPACES I0Reg @ .
     CR ." DEBUG: V0:" 5 SPACES V0Reg @ .
     CR ." DEBUG: V1:" 5 SPACES V1Reg @ .
@@ -265,7 +290,7 @@ VARIABLE drw-y
         CR
         CR ." DEBUG: PC:" 5 SPACES PC @ .
         print-registers
-        
+
         PC @ read-opcode
         to-big-endian-opcode
 
