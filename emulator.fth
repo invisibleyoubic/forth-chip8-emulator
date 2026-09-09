@@ -23,6 +23,15 @@ VARIABLE VDReg
 VARIABLE VEReg
 VARIABLE VFREg
 
+\ 2048 symbols
+\ 64 x 32
+CREATE frame-buffer 2048 ALLOT
+
+\ TODO: remove later
+VARIABLE drw-x
+VARIABLE drw-y
+
+
 : 12-rightmost
     \ 0x0FFF
     DUP 4095 AND
@@ -30,7 +39,7 @@ VARIABLE VFREg
 
 : call-jump
     HEX
-    CR ." DEBUG: Jump addres: " DUP .
+    CR ." DEBUG: Jump address: " DUP .
     DECIMAL
 
     PC !
@@ -69,6 +78,121 @@ VARIABLE VFREg
     ENDCASE
 ;
 
+\ TODO: constants
+\ TODO: overlapping 
+\ offset = y * 64 + x + bit
+: pixel-address ( x y -- addr )
+    32 * + frame-buffer +
+;
+
+: pixel! ( value x y -- )
+    pixel-address
+    SWAP DUP 0 <> IF DROP 255 THEN SWAP
+    DUP C@ ROT XOR SWAP
+    C!
+;
+
+: print-screen
+    32 0 DO
+        CR
+        64 0 DO
+            J I pixel-address C@
+            DUP 0 = IF ." .." THEN
+            255 = IF ." ##" THEN
+        LOOP
+    LOOP
+;
+
+\ TODO: rewrite
+: call-DRV
+    \ x
+    \ 0x0F00
+    DUP 3840 AND 8 RSHIFT
+    CASE
+        0  OF V0Reg @ ENDOF
+        1  OF V1Reg @ ENDOF
+        2  OF V2Reg @ ENDOF
+        3  OF V3Reg @ ENDOF
+        4  OF V4Reg @ ENDOF
+        5  OF V5Reg @ ENDOF
+        6  OF V6Reg @ ENDOF
+        7  OF V7Reg @ ENDOF
+        8  OF V8Reg @ ENDOF
+        9  OF V9Reg @ ENDOF
+        10 OF VAReg @ ENDOF
+        11 OF VBReg @ ENDOF
+        12 OF VCReg @ ENDOF
+        13 OF VDReg @ ENDOF
+        14 OF VEReg @ ENDOF
+        15 OF VFReg @ ENDOF
+    ENDCASE
+    drw-x !
+
+    \ y
+    \ 0x00F0
+    DUP 240 AND 4 RSHIFT
+    CASE
+        0  OF V0Reg @ ENDOF
+        1  OF V1Reg @ ENDOF
+        2  OF V2Reg @ ENDOF
+        3  OF V3Reg @ ENDOF
+        4  OF V4Reg @ ENDOF
+        5  OF V5Reg @ ENDOF
+        6  OF V6Reg @ ENDOF
+        7  OF V7Reg @ ENDOF
+        8  OF V8Reg @ ENDOF
+        9  OF V9Reg @ ENDOF
+        10 OF VAReg @ ENDOF
+        11 OF VBReg @ ENDOF
+        12 OF VCReg @ ENDOF
+        13 OF VDReg @ ENDOF
+        14 OF VEReg @ ENDOF
+        15 OF VFReg @ ENDOF
+    ENDCASE
+    drw-y !
+
+    \ n
+    \ 0x000F
+    15 AND
+
+    HEX
+    \ memory of ROM starts from 0x200
+    I0Reg @ 512 -
+    S>D file-id @ REPOSITION-FILE THROW
+
+    0 DO
+        opcode-buffer 1 file-id @ READ-FILE THROW DROP
+
+        opcode-buffer C@ 128 AND drw-y @ drw-x @ 0 +
+        pixel!
+
+        opcode-buffer C@ 64 AND drw-y @ drw-x @ 1 +
+        pixel!
+
+        opcode-buffer C@ 32 AND drw-y @ drw-x @ 2 +
+        pixel!
+
+        opcode-buffer C@ 16 AND drw-y @ drw-x @ 3 +
+        pixel!
+
+        opcode-buffer C@ 8 AND drw-y @ drw-x @ 4 +
+        pixel!
+
+        opcode-buffer C@ 4 AND drw-y @ drw-x @ 5 +
+        pixel!
+
+        opcode-buffer C@ 2 AND drw-y @ drw-x @ 6 +
+        pixel!
+
+        opcode-buffer C@ 1 AND drw-y @ drw-x @ 7 +
+        pixel!
+
+        drw-y @ 1+ drw-y !
+    LOOP
+
+    DECIMAL
+;
+
 : execute-opcode
     opcode-buffer @
 
@@ -78,19 +202,19 @@ VARIABLE VFREg
 
     CASE
         0  OF CR ." 0 Prefix - not implemented" ENDOF
-        1  OF 12-rightmost call-jump ENDOF
+        1  OF 12-rightmost call-jump DROP ENDOF
         2  OF CR ." 2 Prefix - not implemented" ENDOF
         3  OF CR ." 3 Prefix - not implemented" ENDOF
         4  OF CR ." 4 Prefix - not implemented" ENDOF
         5  OF CR ." 5 Prefix - not implemented" ENDOF
-        6  OF 12-rightmost call-LDV PC @ 2 + PC ! ENDOF
+        6  OF 12-rightmost call-LDV PC @ 2 + PC ! DROP ENDOF
         7  OF CR ." 7 Prefix - not implemented" ENDOF
         8  OF CR ." 8 Prefix - not implemented" ENDOF
         9  OF CR ." 9 Prefix - not implemented" ENDOF
-        10 OF 12-rightmost call-LDI PC @ 2 + PC ! ENDOF
+        10 OF 12-rightmost call-LDI PC @ 2 + PC ! DROP ENDOF
         11 OF CR ." B Prefix - not implemented" ENDOF
         12 OF CR ." C Prefix - not implemented" ENDOF
-        13 OF CR ." D Prefix - not implemented" ENDOF
+        13 OF 12-rightmost call-DRV PC @ 2 + PC ! DROP ENDOF
         14 OF CR ." E Prefix - not implemented" ENDOF
         15 OF CR ." F Prefix - not implemented" ENDOF
     ENDCASE
@@ -147,6 +271,9 @@ VARIABLE VFREg
 
         CR CR ." DEBUG: OC:" 5 SPACES opcode-buffer @ .
         CR
+
+        CR ." STACK: " .S
+        print-screen
         DECIMAL
 
         CR ." ============================================"
@@ -163,4 +290,5 @@ S" samples/octojam8title.ch8" R/O BIN OPEN-FILE THROW
 file-id !
 file-id @ ." DEBUG: file id: " . CR CR
 
+frame-buffer 2048 0 FILL
 app-loop
