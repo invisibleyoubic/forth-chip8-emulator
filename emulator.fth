@@ -167,22 +167,11 @@ VARIABLE drw_y
     pixel_address
     SWAP DUP
     0 <> IF
-        DROP $FF 
+        DROP $FF
     THEN
     SWAP DUP C@
     ROT XOR SWAP
     C!
-;
-
-: print_screen
-    32 0 DO
-        CR
-        64 0 DO
-            J I pixel_address C@
-            DUP 0 = IF ." .." THEN
-            255 = IF ." ##" THEN
-        LOOP
-    LOOP
 ;
 
 \ TODO: rewrite
@@ -357,44 +346,67 @@ VARIABLE drw_y
     2 <> THROW
 ;
 
-: print_registers
-    CR ." DEBUG: I0:" 5 SPACES I0Reg @ .
-    CR ." DEBUG: V0:" 5 SPACES V0Reg @ .
-    CR ." DEBUG: V1:" 5 SPACES V1Reg @ .
-    CR ." DEBUG: V2:" 5 SPACES V2Reg @ .
-    CR ." DEBUG: V3:" 5 SPACES V3Reg @ .
-    CR ." DEBUG: V4:" 5 SPACES V4Reg @ .
-    CR ." DEBUG: V5:" 5 SPACES V5Reg @ .
-    CR ." DEBUG: V6:" 5 SPACES V6Reg @ .
-    CR ." DEBUG: V7:" 5 SPACES V7Reg @ .
-    CR ." DEBUG: V8:" 5 SPACES V8Reg @ .
-    CR ." DEBUG: V9:" 5 SPACES V9Reg @ .
-    CR ." DEBUG: VA:" 5 SPACES VAReg @ .
-    CR ." DEBUG: VB:" 5 SPACES VBReg @ .
-    CR ." DEBUG: VC:" 5 SPACES VCReg @ .
-    CR ." DEBUG: VD:" 5 SPACES VDReg @ .
-    CR ." DEBUG: VE:" 5 SPACES VEReg @ .
-    CR ." DEBUG: VF:" 5 SPACES VFREg @ .
+: print_register
+    CASE
+        0  OF ." "                      ENDOF
+        1  OF ." "                      ENDOF
+        2  OF ." "                      ENDOF
+        3  OF ." "                      ENDOF
+
+        4  OF ." OC:" opcode_buffer @ . ENDOF
+        5  OF ." PC:" PC    @ .         ENDOF
+        6  OF ." "                      ENDOF
+
+        7  OF ." I: " I0Reg @ .         ENDOF
+        8  OF ." "                      ENDOF
+
+        9  OF ." V0:" V0Reg @ .         ENDOF
+        10 OF ." V1:" V1Reg @ .         ENDOF
+        11 OF ." V2:" V2Reg @ .         ENDOF
+        12 OF ." V3:" V3Reg @ .         ENDOF
+        13 OF ." V4:" V4Reg @ .         ENDOF
+        14 OF ." V5:" V5Reg @ .         ENDOF
+        15 OF ." V6:" V6Reg @ .         ENDOF
+        16 OF ." V7:" V7Reg @ .         ENDOF
+        17 OF ." V8:" V8Reg @ .         ENDOF
+        18 OF ." V9:" V9Reg @ .         ENDOF
+        19 OF ." VA:" VAReg @ .         ENDOF
+        20 OF ." VB:" VBReg @ .         ENDOF
+        21 OF ." VC:" VCReg @ .         ENDOF
+        22 OF ." VD:" VDReg @ .         ENDOF
+        23 OF ." VE:" VEReg @ .         ENDOF
+        24 OF ." VF:" VFREg @ .         ENDOF
+        25 OF ." "                      ENDOF
+        26 OF ." "                      ENDOF
+
+        27 OF ." DT:" DT    @ .         ENDOF
+        28 OF ." ST:" ST    @ .         ENDOF
+        29 OF ." "                      ENDOF
+        30 OF ." "                      ENDOF
+
+        31 OF ." STACK:"   .S           ENDOF
+    ENDCASE
+;
+
+: print_screen
+    32 0 DO
+        CR
+        64 0 DO
+            J I pixel_address C@ DUP
+            0   = IF ." .." THEN
+            255 = IF ." ##" THEN
+        LOOP
+        5 SPACES I print_register
+    LOOP
 ;
 
 : app_loop
     BEGIN
-        PAGE
-        HEX
-        CR
-        CR ." DEBUG: PC:" 5 SPACES PC @ .
-        print_registers
-
-        CR ." DEBUG: DT:" 5 SPACES DT @ .
-        CR ." DEBUG: ST:" 5 SPACES ST @ .
-
         PC @ read_opcode
         to_big_endian_opcode
 
-        CR CR ." DEBUG: OC:" 5 SPACES opcode_buffer @ .
-        CR
-
-        CR ." STACK: " .S
+        HEX
+        PAGE
         print_screen
         DECIMAL
 
@@ -403,8 +415,11 @@ VARIABLE drw_y
         \ KEY DROP
 
         \ TODO: implement timer
-        20 MS
-        0 DT @ <> IF DT @ 1 - DT ! THEN
+        0 DT @ <> IF 
+            30 MS 
+            DT @ 1 - 
+            DT ! 
+        THEN
         execute_opcode
     AGAIN
 ;
