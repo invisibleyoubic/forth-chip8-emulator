@@ -36,9 +36,8 @@ VARIABLE drw_x
 VARIABLE drw_y
 
 
-: 12_rightmost
-    \ 0x0FFF
-    4095 AND
+: 12_rightmost ( abcd -- bcd )
+    $0FFF AND
 ;
 
 : V_register_address ( num -- addr )
@@ -63,8 +62,8 @@ VARIABLE drw_y
 ;
 
 : call_JMP
-    HEX
     $200 -
+    HEX
     CR ." DEBUG: Jump address: " DUP .
     DECIMAL
 
@@ -73,12 +72,13 @@ VARIABLE drw_y
 
 : call_CALL
     PC @ 2 + SWAP
+    $200 -
 
     HEX
-    $200 -
     CR ." DEBUG: Address to call: " DUP .
-    PC !
     DECIMAL
+
+    PC !
 ;
 
 : call_RET
@@ -109,41 +109,31 @@ VARIABLE drw_y
 ;
 
 : call_SE
-    \ 0x00FF
-    DUP 255 AND SWAP
+    DUP $00FF AND SWAP
 
-    \ 0x0F00
-    3840 AND 8 RSHIFT
+    $0F00 AND 8 RSHIFT
     V_register_address @
-    = IF PC @ 2 + PC ! THEN
+    = IF 
+        PC @ 2 + 
+        PC ! 
+    THEN
 ;
 
 : call_FCMD
-    \ 0x0F00
-    DUP 3840 AND 8 RSHIFT SWAP
-
-    \ 0x00FF
-    255 AND
+    DUP $0F00 AND 8 RSHIFT
+    SWAP
+    $00FF AND
 
     CASE
-        \ 07
-        7   OF DT @ SWAP V_register_address ! ENDOF
-        \ 0A
-        10  OF ." Wait for a key. Not implemented" ENDOF
-        \ 15
-        21  OF V_register_address @ DT ! ENDOF
-        \ 18
-        24  OF V_register_address @ ST ! ENDOF
-        \ 1E
-        30  OF V_register_address @ I0Reg @ + I0Reg ! ENDOF
-        \ 29
-        41  OF ." Set I to location of sprite of Vx. Not implemented" ENDOF
-        \ 33
-        51  OF ." Store hundreds in I, tens in I+1 and ones in I+2. Not implemented" ENDOF
-        \ 55
-        85  OF ." Copy values from V0 to VX to address of I. Not implemented" ENDOF
-        \ 65
-        101 OF ." Read values from address of I to V0 to VX. Not implemented" ENDOF
+        $07   OF DT @ SWAP V_register_address ! ENDOF
+        $0A  OF ." Wait for a key. Not implemented" ENDOF
+        $15  OF V_register_address @ DT ! ENDOF
+        $18  OF V_register_address @ ST ! ENDOF
+        $1E  OF V_register_address @ I0Reg @ + I0Reg ! ENDOF
+        $29  OF ." Set I to location of sprite of Vx. Not implemented" ENDOF
+        $33  OF ." Store hundreds in I, tens in I+1 and ones in I+2. Not implemented" ENDOF
+        $55  OF ." Copy values from V0 to VX to address of I. Not implemented" ENDOF
+        $65 OF ." Read values from address of I to V0 to VX. Not implemented" ENDOF
     ENDCASE
 ;
 
@@ -159,26 +149,28 @@ VARIABLE drw_y
 ;
 
 : call_RND
-    \ 0x00FF
-    DUP 255 AND
-    random8 AND SWAP
-
-    \ 0x0F00
-    3840 AND 8 RSHIFT
+    DUP $00FF AND
+    random8 AND 
+    SWAP
+    $0F00 AND 8 RSHIFT
     V_register_address !
 ;
 
 \ TODO: constants
-\ TODO: overlapping 
-\ offset = y * 64 + x + bit
+\ TODO: overlapping
+\ TODO: parameters order
 : pixel_address ( x y -- addr )
     32 * + frame_buffer +
 ;
 
 : pixel! ( value x y -- )
     pixel_address
-    SWAP DUP 0 <> IF DROP 255 THEN SWAP
-    DUP C@ ROT XOR SWAP
+    SWAP DUP
+    0 <> IF
+        DROP $FF 
+    THEN
+    SWAP DUP C@
+    ROT XOR SWAP
     C!
 ;
 
@@ -196,8 +188,7 @@ VARIABLE drw_y
 \ TODO: rewrite
 : call_DRV
     \ x
-    \ 0x0F00
-    DUP 3840 AND 8 RSHIFT
+    DUP $0F00 AND 8 RSHIFT
     CASE
         0  OF V0Reg @ ENDOF
         1  OF V1Reg @ ENDOF
@@ -219,8 +210,7 @@ VARIABLE drw_y
     drw_x !
 
     \ y
-    \ 0x00F0
-    DUP 240 AND 4 RSHIFT
+    DUP $00F0 AND 4 RSHIFT
     CASE
         0  OF V0Reg @ ENDOF
         1  OF V1Reg @ ENDOF
@@ -242,12 +232,11 @@ VARIABLE drw_y
     drw_y !
 
     \ n
-    \ 0x000F
-    15 AND
+    $F AND
 
     HEX
     \ memory of ROM starts from 0x200
-    I0Reg @ 512 -
+    I0Reg @ $200 -
     S>D file_id @ REPOSITION-FILE THROW
 
     0 DO
@@ -286,35 +275,66 @@ VARIABLE drw_y
 : execute_opcode
     opcode_buffer @
 
-    \ 0xF000
-    DUP 61440 AND 12 RSHIFT
+    DUP $F000 AND 12 RSHIFT
     CR ." DEBUG: Command : " DUP .
 
     CASE
-        0  OF 
-            12_rightmost 
+        0  OF
+            12_rightmost
             $00FF AND
-            DUP $EE = IF DROP call_RET 
+            $EE = IF
+                call_RET
             ELSE
-                $E0 = IF call_CLS THEN
+                $E0 = IF
+                    call_CLS
+                THEN
             THEN
-            ENDOF
-        1  OF 12_rightmost call_JMP ENDOF
-        \ 2  OF 12_rightmost call_CALL PC @ 2 + PC ! DROP ENDOF
-        2  OF 12_rightmost call_CALL ENDOF
-        3  OF 12_rightmost call_SE PC @ 2 + PC ! ENDOF
-        4  OF CR ." 4 Prefix - not implemented" ENDOF
-        5  OF CR ." 5 Prefix - not implemented" ENDOF
-        6  OF 12_rightmost call_LDV PC @ 2 + PC ! ENDOF
-        7  OF 12_rightmost call_ADD PC @ 2 + PC ! ENDOF
-        8  OF CR ." 8 Prefix - not implemented" ENDOF
-        9  OF CR ." 9 Prefix - not implemented" ENDOF
-        10 OF 12_rightmost call_LDI PC @ 2 + PC ! ENDOF
-        11 OF CR ." B Prefix - not implemented" ENDOF
-        12 OF 12_rightmost call_RND PC @ 2 + PC ! ENDOF
-        13 OF 12_rightmost call_DRV PC @ 2 + PC ! ENDOF
-        14 OF CR ." E Prefix - not implemented" ENDOF
-        15 OF 12_rightmost call_FCMD PC @ 2 + PC ! ENDOF
+        ENDOF
+        1  OF 
+            12_rightmost call_JMP
+        ENDOF
+        2  OF 
+            12_rightmost call_CALL
+        ENDOF
+        3  OF 
+            12_rightmost call_SE PC @ 2 + PC !
+        ENDOF
+        4  OF 
+            CR ." 4 Prefix - not implemented"
+        ENDOF
+        5  OF 
+            CR ." 5 Prefix - not implemented"
+        ENDOF
+        6  OF 
+            12_rightmost call_LDV PC @ 2 + PC !
+        ENDOF
+        7  OF 
+            12_rightmost call_ADD PC @ 2 + PC !
+        ENDOF
+        8  OF 
+            CR ." 8 Prefix - not implemented"
+        ENDOF
+        9  OF 
+            CR ." 9 Prefix - not implemented"
+        ENDOF
+        10 OF 
+            12_rightmost call_LDI PC @ 2 + PC !
+        ENDOF
+        11 OF 
+            CR ." B Prefix - not implemented"
+        ENDOF
+        12 OF 
+            12_rightmost call_RND PC @ 2 + PC !
+        ENDOF
+        13 OF 
+            12_rightmost call_DRV PC @ 2 + PC !
+        ENDOF
+        14 OF 
+            CR ." E Prefix - not implemented"
+        ENDOF
+        15 OF 
+            12_rightmost call_FCMD PC @ 2 + PC !
+        ENDOF
     ENDCASE
 ;
 
