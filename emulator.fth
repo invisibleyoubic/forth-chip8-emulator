@@ -1,143 +1,188 @@
-VARIABLE file_id
+VARIABLE random_seed 1 
+         random_seed !
 
-VARIABLE opcode_buffer
-VARIABLE random_seed 1 random_seed !
+$0   CONSTANT SPRITE_START
+$200 CONSTANT ROM_START
+32   CONSTANT DISPLAY_HEIGHT
+64   CONSTANT DISPLAY_WIDTH
+
+\ REGISTERS 
 
 VARIABLE PC
 
-VARIABLE I0Reg
+VARIABLE I0
 
-VARIABLE V0Reg
-VARIABLE V1Reg
-VARIABLE V2Reg
-VARIABLE V3Reg
-VARIABLE V4Reg
-VARIABLE V5Reg
-VARIABLE V6Reg
-VARIABLE V7Reg
-VARIABLE V8Reg
-VARIABLE V9Reg
-VARIABLE VAReg
-VARIABLE VBReg
-VARIABLE VCReg
-VARIABLE VDReg
-VARIABLE VEReg
-VARIABLE VFREg
+VARIABLE V0
+VARIABLE V1
+VARIABLE V2
+VARIABLE V3
+VARIABLE V4
+VARIABLE V5
+VARIABLE V6
+VARIABLE V7
+VARIABLE V8
+VARIABLE V9
+VARIABLE VA
+VARIABLE VB
+VARIABLE VC
+VARIABLE VD
+VARIABLE VE
+VARIABLE VF
 
-VARIABLE DT
-VARIABLE ST
+\ TIMERS 
 
-\ 2048 symbols
-\ 64 x 32
-CREATE frame_buffer 2048 ALLOT
+VARIABLE DelayTimer
+VARIABLE SoundTimer
 
-\ TODO: remove later
-VARIABLE drw_x
-VARIABLE drw_y
+\ FULL RAM MEMORY OF CHIP
+\ 0x000 - 0x1FF interpreter memory
+\ 0x200 - 0xFFF loaded ROM data
+CREATE RAM_MEMORY 4096 ALLOT
 
+\ FULL BUFFER OF DISPLAY
+\ 64 x 32 = 2048 points
+CREATE DISPLAY_BUFFER 2048 ALLOT
+VARIABLE DRW_X
+VARIABLE DRW_Y
 
-: 12_rightmost ( abcd -- bcd )
+: RAM@
+    RAM_MEMORY + C@
+;
+
+: COMMAND@
+    $F000 AND 12 RSHIFT
+;
+
+: PARAMS@ ( abcd -- bcd )
     $0FFF AND
 ;
 
-: V_register_address ( num -- addr )
+: PC ( -- addr )
+    PC
+;
+
+: PC@ ( -- value )
+    PC @
+;
+
+: PC! ( value -- )
+    PC !
+;
+
+: NEXT_INS@ ( -- PC + 2 )
+    PC@ 2 +
+;
+
+: NEXT_INS! ( -- set PC = PC + 2 )
+    NEXT_INS@ PC!
+;
+
+: PREV_INS@ ( -- PC - 2 )
+    PC@ 2 -
+;
+
+: PREV_INS! ( -- set PC = PC - 2 )
+    PREV_INS@ PC! 
+;
+
+: IREG ( -- addr )
+    I0
+;
+
+: IREG@ ( -- value )
+    I0 @
+;
+
+: IREG! ( value -- )
+    I0 !
+;
+
+: VREG ( n -- addr )
     CASE
-        0  OF V0Reg ENDOF
-        1  OF V1Reg ENDOF
-        2  OF V2Reg ENDOF
-        3  OF V3Reg ENDOF
-        4  OF V4Reg ENDOF
-        5  OF V5Reg ENDOF
-        6  OF V6Reg ENDOF
-        7  OF V7Reg ENDOF
-        8  OF V8Reg ENDOF
-        9  OF V9Reg ENDOF
-        10 OF VAReg ENDOF
-        11 OF VBReg ENDOF
-        12 OF VCReg ENDOF
-        13 OF VDReg ENDOF
-        14 OF VEReg ENDOF
-        15 OF VFReg ENDOF
+        $0 OF V0 ENDOF
+        $1 OF V1 ENDOF
+        $2 OF V2 ENDOF
+        $3 OF V3 ENDOF
+        $4 OF V4 ENDOF
+        $5 OF V5 ENDOF
+        $6 OF V6 ENDOF
+        $7 OF V7 ENDOF
+        $8 OF V8 ENDOF
+        $9 OF V9 ENDOF
+        $A OF VA ENDOF
+        $B OF VB ENDOF
+        $C OF VC ENDOF
+        $D OF VD ENDOF
+        $E OF VE ENDOF
+        $F OF VF ENDOF
     ENDCASE
 ;
 
-: call_JMP
-    $200 -
-    HEX
-    CR ." DEBUG: Jump address: " DUP .
-    DECIMAL
-
-    PC !
+: VREG@ ( n -- value )
+    VREG C@
 ;
 
-: call_CALL
-    PC @ 2 + SWAP
-    $200 -
-
-    HEX
-    CR ." DEBUG: Address to call: " DUP .
-    DECIMAL
-
-    PC !
+: VREG! ( value n -- )
+    VREG C!
 ;
 
-: call_RET
-    PC !
+: DelayTimer ( -- addr )
+    DelayTimer
 ;
 
-: call_CLS
-    frame_buffer 2048 0 FILL
+: DelayTimer@ ( -- value )
+    DelayTimer @
 ;
 
-: call_LDI
-    I0Reg !
+: DelayTimer! ( value -- )
+    DelayTimer !
 ;
 
-: call_LDV
-    DUP $00FF AND SWAP
-
-    $0F00 AND 8 RSHIFT
-    V_register_address !
+: SoundTimer ( -- addr )
+    SoundTimer
 ;
 
-: call_ADD
-    DUP $00FF AND SWAP
-
-    $0F00 AND 8 RSHIFT
-    V_register_address
-    DUP @ ROT + SWAP !
+: SoundTimer@ ( -- value )
+    SoundTimer @
 ;
 
-: call_SE
-    DUP $00FF AND SWAP
+: SoundTimer! ( value -- )
+    SoundTimer !
+;
 
-    $0F00 AND 8 RSHIFT
-    V_register_address @
-    = IF 
-        PC @ 2 + 
-        PC ! 
+\ DISPLAY
+\ TODO: overlapping
+: PIXEL ( y x -- addr )
+    32 * + DISPLAY_BUFFER +
+;
+
+: PIXEL@ ( y x -- value )
+    PIXEL C@
+;
+
+: PIXEL! ( value y x -- )
+    PIXEL           \ get pixel address
+    SWAP DUP        \ address , value , value
+
+    0 <> IF         \ if value != 0 => value = 0xFF
+        DROP $FF
     THEN
+
+    SWAP DUP C@         \ value , address , pixel
+    ROT OVER XOR        \ address , pixel , value XOR pixel
+    SWAP                \ address , value XOR pixel , pixel
+    $FF = IF            \ if previous pixel was 0xFF
+        DUP
+        0 = IF          \ and current pixel became 0
+            1 $F VREG!  \ set collission
+        THEN
+    THEN
+    SWAP C!             \ set XORed value to pixel
 ;
 
-: call_FCMD
-    DUP $0F00 AND 8 RSHIFT
-    SWAP
-    $00FF AND
+\ HELPERS
 
-    CASE
-        $07   OF DT @ SWAP V_register_address ! ENDOF
-        $0A  OF ." Wait for a key. Not implemented" ENDOF
-        $15  OF V_register_address @ DT ! ENDOF
-        $18  OF V_register_address @ ST ! ENDOF
-        $1E  OF V_register_address @ I0Reg @ + I0Reg ! ENDOF
-        $29  OF ." Set I to location of sprite of Vx. Not implemented" ENDOF
-        $33  OF ." Store hundreds in I, tens in I+1 and ones in I+2. Not implemented" ENDOF
-        $55  OF ." Copy values from V0 to VX to address of I. Not implemented" ENDOF
-        $65 OF ." Read values from address of I to V0 to VX. Not implemented" ENDOF
-    ENDCASE
-;
-
-: random8
+: RANDOM8@
     random_seed @
     DUP 1 AND IF
       1 RSHIFT $B4 XOR
@@ -148,243 +193,443 @@ VARIABLE drw_y
     $FF AND
 ;
 
-: call_RND
+: DRW_X@ ( -- value )
+    DRW_X @
+;
+
+: DRW_X! ( value -- )
+    DRW_X !
+;
+
+: DRW_Y@ ( -- value )
+    DRW_Y @
+;
+
+: DRW_Y! ( value -- )
+    DRW_Y !
+;
+
+\ INSTRUCTIONS
+
+\ SYS - jump to address
+: INS_0nnn ( addr -- )
+    PC!
+;
+
+\ CLS - clear screen
+: INS_00E0 ( -- )
+    DISPLAY_BUFFER 2048 0 FILL
+;
+
+\ RET - return from subroutine
+: INS_00EE ( -- )
+    PC!
+;
+
+\ JP - jump to address
+: INS_1nnn ( addr -- )
+    PC!
+;
+
+\ CALL - call subroutine 
+: INS_2nnn ( addr -- next_instr )
+    PC@ SWAP PC!
+;
+
+\ SE - skip next instruction if Vx == kk
+: INS_3xkk ( x kk -- )
+    DUP $00FF AND SWAP
+    $0F00 AND 8 RSHIFT
+
+    VREG@
+    = IF            \ if Vx == kk
+        NEXT_INS!
+    THEN
+;
+
+\ SNE - skip next instruction if Vx != kk
+: INS_4xkk ( x kk -- )
+    DUP $00FF AND SWAP
+    $0F00 AND 8 RSHIFT
+
+    VREG@
+    <> IF           \ if Vx != kk
+        NEXT_INS! 
+    THEN
+;
+
+\ SE - skip next instruction if Vx == Vy
+: INS_5xy0 ( x y -- )
+    DUP $0F00 AND 16 RSHIFT 
+    VREG@
+
+    SWAP
+
+    $00F0 AND 8 RSHIFT
+    VREG@
+
+    = IF            \ if Vx == Vy
+        NEXT_INS!
+    THEN
+;
+
+\ LD - Vx = kk
+: INS_6xkk ( x kk -- )
+    DUP $00FF AND SWAP
+
+    $0F00 AND 8 RSHIFT
+    VREG!
+;
+
+\ ADD - Vx = Vx + kk
+: INS_7xkk ( x kk -- )
+    DUP $00FF AND SWAP
+
+    $0F00 AND 8 RSHIFT
+    VREG DUP @ 
+    ROT + SWAP !
+;
+
+\ LD - Vx = Vy
+: INS_8xy0 ( x y -- )
+    DUP $00F0 AND 8 RSHIFT
+    VREG@
+
+    SWAP
+
+    $0F00 AND 16 RSHIFT 
+    VREG@
+
+    + VREG!
+;
+
+\ OR - Vx or Vy
+: INS_8xy1 ( x y -- )
+    DUP $00F0 AND 8 RSHIFT
+    VREG@
+
+    SWAP
+
+    $0F00 AND 16 RSHIFT 
+    VREG@
+
+    OR VREG!
+;
+
+\ AND - Vx and Vy
+: INS_8xy2 ( x y -- )
+    DUP $00F0 AND 8 RSHIFT
+    VREG@
+
+    SWAP
+
+    $0F00 AND 16 RSHIFT 
+    VREG@
+
+    AND VREG!
+;
+
+\ XOR
+: INS_8xy3 ( x y -- )
+    DUP $00F0 AND 8 RSHIFT
+    VREG@
+
+    SWAP
+
+    $0F00 AND 16 RSHIFT 
+    VREG@
+
+    XOR VREG!
+;
+
+\ ADD - Vx = Vx + Vy, VF = carry
+: INS_8xy4 ( x y -- )
+    DUP $00F0 AND 8 RSHIFT
+    VREG@
+
+    SWAP
+
+    $0F00 AND 16 RSHIFT 
+    VREG@
+
+    + DUP $FF > IF 
+        1 $F VREG!
+    THEN
+    $FF AND VREG!
+;
+
+\ SUB - Vx = Vx - Vy, VF = NOT borrow
+: INS_8xy5 ( x y -- )
+;
+
+\ SHR - Vx = Vx SHR 1
+: INS_8xy6 ( x y -- )
+;
+
+\ SUBN - Vx = Vy - Vx, VF = NOT borrow
+: INS_8xy7 ( x y -- )
+;
+
+\ SHL - Vx = Vx SHL 1
+: INS_8xyE ( x y -- )
+;
+
+\ SNE - Skip next instruction if Vx != Vy.
+: INS_9xy0 ( x y -- )
+    DUP $0F00 AND 16 RSHIFT 
+    VREG@
+
+    SWAP
+
+    $00F0 AND 8 RSHIFT
+    VREG@
+
+    <> IF            \ if Vx != Vy
+        PC @ 2 + 
+        PC ! 
+    THEN
+;
+
+\ LD I - Set I = nnn
+: INS_Annn ( value -- )
+    IREG!
+;
+
+\ JP - Jump to location nnn + V0
+: INS_Bnnn ( value -- )
+    0 VREG@
+    + PC!
+;
+
+\ RND - Set Vx = random byte AND kk
+: INS_Cxkk ( x kk -- )
     DUP $00FF AND
-    random8 AND 
+    RANDOM8@ AND
     SWAP
     $0F00 AND 8 RSHIFT
-    V_register_address !
+    VREG !
 ;
 
-\ TODO: constants
-\ TODO: overlapping
-\ TODO: parameters order
-: pixel_address ( x y -- addr )
-    32 * + frame_buffer +
-;
+\ DRW - Display n byte sprite from I at Vx, Vy, Set VF = collision
+: INS_Dxyn ( x y n -- )
+    0 $F VREG!  \ set 0 to VF register
 
-: pixel! ( value x y -- )
-    pixel_address
-    SWAP DUP
-    0 <> IF
-        DROP $FF
-    THEN
-    SWAP DUP C@
-    ROT XOR SWAP
-    C!
-;
-
-\ TODO: rewrite
-: call_DRV
-    \ x
     DUP $0F00 AND 8 RSHIFT
-    CASE
-        0  OF V0Reg @ ENDOF
-        1  OF V1Reg @ ENDOF
-        2  OF V2Reg @ ENDOF
-        3  OF V3Reg @ ENDOF
-        4  OF V4Reg @ ENDOF
-        5  OF V5Reg @ ENDOF
-        6  OF V6Reg @ ENDOF
-        7  OF V7Reg @ ENDOF
-        8  OF V8Reg @ ENDOF
-        9  OF V9Reg @ ENDOF
-        10 OF VAReg @ ENDOF
-        11 OF VBReg @ ENDOF
-        12 OF VCReg @ ENDOF
-        13 OF VDReg @ ENDOF
-        14 OF VEReg @ ENDOF
-        15 OF VFReg @ ENDOF
-    ENDCASE
-    drw_x !
+    VREG@ DRW_X!
 
-    \ y
     DUP $00F0 AND 4 RSHIFT
-    CASE
-        0  OF V0Reg @ ENDOF
-        1  OF V1Reg @ ENDOF
-        2  OF V2Reg @ ENDOF
-        3  OF V3Reg @ ENDOF
-        4  OF V4Reg @ ENDOF
-        5  OF V5Reg @ ENDOF
-        6  OF V6Reg @ ENDOF
-        7  OF V7Reg @ ENDOF
-        8  OF V8Reg @ ENDOF
-        9  OF V9Reg @ ENDOF
-        10 OF VAReg @ ENDOF
-        11 OF VBReg @ ENDOF
-        12 OF VCReg @ ENDOF
-        13 OF VDReg @ ENDOF
-        14 OF VEReg @ ENDOF
-        15 OF VFReg @ ENDOF
-    ENDCASE
-    drw_y !
+    VREG@ DRW_Y!
 
-    \ n
-    $F AND
+    $F AND 0 DO
+        IREG@ I + RAM@
 
-    HEX
-    \ memory of ROM starts from 0x200
-    I0Reg @ $200 -
-    S>D file_id @ REPOSITION-FILE THROW
+        8 0 DO
+            DUP
+            1 7 I - LSHIFT AND  \ RAM[I] and (1 << 7 - J)
+            DRW_Y@ DRW_X@ I +
+            PIXEL!
+        LOOP
 
-    0 DO
-        opcode_buffer 1 file_id @ READ-FILE THROW DROP
-
-        opcode_buffer C@ 128 AND drw_y @ drw_x @ 0 +
-        pixel!
-
-        opcode_buffer C@ 64 AND drw_y @ drw_x @ 1 +
-        pixel!
-
-        opcode_buffer C@ 32 AND drw_y @ drw_x @ 2 +
-        pixel!
-
-        opcode_buffer C@ 16 AND drw_y @ drw_x @ 3 +
-        pixel!
-
-        opcode_buffer C@ 8 AND drw_y @ drw_x @ 4 +
-        pixel!
-
-        opcode_buffer C@ 4 AND drw_y @ drw_x @ 5 +
-        pixel!
-
-        opcode_buffer C@ 2 AND drw_y @ drw_x @ 6 +
-        pixel!
-
-        opcode_buffer C@ 1 AND drw_y @ drw_x @ 7 +
-        pixel!
-
-        drw_y @ 1+ drw_y !
+        DROP
+        DRW_Y@ 1+ DRW_Y!
     LOOP
-
-    DECIMAL
 ;
 
-: execute_opcode
-    opcode_buffer @
+\ SKP - Skip next instution if key with the value of Vx is pressed
+: INS_Ex9E ( x -- )
+    \ TODO: keyboard check
+    DUP $0F00 AND 8 RSHIFT
+    VREG@
+    KEY = IF 
+        NEXT_INS!
+    THEN
+;
 
-    DUP $F000 AND 12 RSHIFT
-    CR ." DEBUG: Command : " DUP .
+\ SKNP - Skip next instution if key with the value of Vx is not pressed
+: INS_ExA1 ( x -- )
+    \ TODO: keyboard check
+    DUP $0F00 AND 8 RSHIFT
+    VREG@
+    KEY <> IF 
+        NEXT_INS!
+    THEN
+;
 
+\ LD Vx DT - Set Vx = delay timer value
+: INS_Fx07 ( x -- )
+    $0F00 AND 8 RSHIFT
+    DelayTimer@ SWAP VREG!
+;
+
+\ LD Vx - Wait for a key press, store the value of the key in Vx
+: INS_Fx0A ( x -- )
+    \ TODO: keyboard capture
+    $0F00 AND 8 RSHIFT
+    KEY SWAP VREG!
+;
+
+\ LD DT Vx - Set delay timer = Vx
+: INS_Fx15 ( x -- )
+    $0F00 AND 8 RSHIFT
+    VREG@ DelayTimer!
+;
+
+\ LD ST Vx - Set sound timer = Vx
+: INS_Fx18 ( x -- )
+    $0F00 AND 8 RSHIFT
+    VREG@ SoundTimer!
+;
+
+\ ADD I - Set I = I + Vx
+: INS_Fx1E ( x -- )
+    $0F00 AND 8 RSHIFT
+    VREG@ IREG@ + IREG!
+;
+
+\ LD F Vx - Set I = location of sprite for digit Vx
+: INS_Fx29 ( x -- )
+    $0F00 AND 8 RSHIFT VREG@
+    5 * SPRITE_START + IREG!
+;
+
+\ LD B Vx - Store BCD representation of Vx in memory locations I, I+1, and I+2.
+: INS_Fx33 ( x -- )
+    \ TODO:;
+;
+
+\ LD [I] Vx - Store registers V0 through Vx in memory starting at location I
+: INS_Fx55
+    \ TODO:;
+;
+
+\ LD Vx [I] - Read registers V0 through Vx from memory starting at location I
+: INS_Fx65
+    \ TODO:;
+;
+
+: CALL_0 ( params -- )
+    DUP $FF00 AND 8 RSHIFT
+    $00 <> IF       \ if command is not 00xx -> call SYS instruction
+        INS_0nnn
+        PREV_INS!
+        EXIT
+    THEN
+
+    $00FF AND
     CASE
-        0  OF
-            12_rightmost
-            $00FF AND
-            $EE = IF
-                call_RET
-            ELSE
-                $E0 = IF
-                    call_CLS
-                THEN
-            THEN
-        ENDOF
-        1  OF 
-            12_rightmost call_JMP
-        ENDOF
-        2  OF 
-            12_rightmost call_CALL
-        ENDOF
-        3  OF 
-            12_rightmost call_SE PC @ 2 + PC !
-        ENDOF
-        4  OF 
-            CR ." 4 Prefix - not implemented"
-        ENDOF
-        5  OF 
-            CR ." 5 Prefix - not implemented"
-        ENDOF
-        6  OF 
-            12_rightmost call_LDV PC @ 2 + PC !
-        ENDOF
-        7  OF 
-            12_rightmost call_ADD PC @ 2 + PC !
-        ENDOF
-        8  OF 
-            CR ." 8 Prefix - not implemented"
-        ENDOF
-        9  OF 
-            CR ." 9 Prefix - not implemented"
-        ENDOF
-        10 OF 
-            12_rightmost call_LDI PC @ 2 + PC !
-        ENDOF
-        11 OF 
-            CR ." B Prefix - not implemented"
-        ENDOF
-        12 OF 
-            12_rightmost call_RND PC @ 2 + PC !
-        ENDOF
-        13 OF 
-            12_rightmost call_DRV PC @ 2 + PC !
-        ENDOF
-        14 OF 
-            CR ." E Prefix - not implemented"
-        ENDOF
-        15 OF 
-            12_rightmost call_FCMD PC @ 2 + PC !
-        ENDOF
+        $0E0 OF INS_00E0 ENDOF
+        $0EE OF INS_00EE ENDOF
     ENDCASE
 ;
 
-: to_big_endian ( addr -- )
-    DUP
-    C@ 8 LSHIFT
-    SWAP 1+ C@ OR
+: CALL_8
+    DUP $000F AND
+    CASE
+        $1 OF INS_8xy1 ENDOF
+        $2 OF INS_8xy2 ENDOF
+        $3 OF INS_8xy3 ENDOF
+        $4 OF INS_8xy4 ENDOF
+        $5 OF INS_8xy5 ENDOF
+        $6 OF INS_8xy6 ENDOF
+        $7 OF INS_8xy7 ENDOF
+        $E OF INS_8xyE ENDOF
+    ENDCASE
 ;
 
-: to_big_endian_opcode
-    opcode_buffer to_big_endian
-    opcode_buffer !
+: CALL_E
+    DUP $00FF AND
+    CASE
+        $9E OF INS_Ex9E ENDOF
+        $A1 OF INS_ExA1 ENDOF
+    ENDCASE
 ;
 
-: read_opcode ( addr -- )
-    S>D file_id @ REPOSITION-FILE THROW
+: CALL_F
+    DUP $00FF AND
+    CASE
+        $07 OF INS_Fx07 ENDOF
+        $0A OF INS_Fx0A ENDOF
+        $15 OF INS_Fx15 ENDOF
+        $18 OF INS_Fx18 ENDOF
+        $1E OF INS_Fx1E ENDOF
+        $29 OF INS_Fx29 ENDOF
+        $33 OF INS_Fx33 ENDOF
+        $55 OF INS_Fx55 ENDOF
+        $65 OF INS_Fx65 ENDOF
+    ENDCASE
+;
 
-    opcode_buffer 2 file_id @ READ-FILE
-    0 <> THROW
-    2 <> THROW
+: exec_opcode
+    DUP PARAMS@
+    CR ." DEBUG: Params:  " DUP .
+    SWAP COMMAND@
+    CR ." DEBUG: Command: " DUP .
+
+    CASE
+        $0 OF CALL_0                ENDOF
+        $1 OF INS_1nnn PREV_INS!    ENDOF
+        $2 OF INS_2nnn PREV_INS!    ENDOF
+        $3 OF INS_3xkk              ENDOF
+        $4 OF INS_4xkk              ENDOF
+        $5 OF INS_5xy0              ENDOF
+        $6 OF INS_6xkk              ENDOF
+        $7 OF INS_7xkk              ENDOF
+        $8 OF CALL_8                ENDOF
+        $9 OF INS_9xy0              ENDOF
+        $A OF INS_Annn              ENDOF
+        $B OF INS_Bnnn PREV_INS!    ENDOF
+        $C OF INS_Cxkk              ENDOF
+        $D OF INS_Dxyn              ENDOF
+        $E OF CALL_E                ENDOF
+        $F OF CALL_F                ENDOF
+    ENDCASE
+;
+
+: get_opcode ( addr -- )
+    DUP RAM@ 8 LSHIFT
+    SWAP 1 + RAM@
+    OR
 ;
 
 : print_register
     CASE
-        0  OF ." "                      ENDOF
-        1  OF ." "                      ENDOF
-        2  OF ." "                      ENDOF
-        3  OF ." "                      ENDOF
+        0  OF ." "                          ENDOF
+        1  OF ." ** REGISTERS INFO **"      ENDOF
+        2  OF ." "                          ENDOF
+        3  OF ." "                          ENDOF
 
-        4  OF ." OC:" opcode_buffer @ . ENDOF
-        5  OF ." PC:" PC    @ .         ENDOF
-        6  OF ." "                      ENDOF
+        4  OF ." OC:" DUP .                 ENDOF
+        5  OF ." PC:" PC@ .                 ENDOF
+        6  OF ." "                          ENDOF
 
-        7  OF ." I: " I0Reg @ .         ENDOF
-        8  OF ." "                      ENDOF
+        7  OF ." I: " IREG@ .               ENDOF
+        8  OF ." "                          ENDOF
 
-        9  OF ." V0:" V0Reg @ .         ENDOF
-        10 OF ." V1:" V1Reg @ .         ENDOF
-        11 OF ." V2:" V2Reg @ .         ENDOF
-        12 OF ." V3:" V3Reg @ .         ENDOF
-        13 OF ." V4:" V4Reg @ .         ENDOF
-        14 OF ." V5:" V5Reg @ .         ENDOF
-        15 OF ." V6:" V6Reg @ .         ENDOF
-        16 OF ." V7:" V7Reg @ .         ENDOF
-        17 OF ." V8:" V8Reg @ .         ENDOF
-        18 OF ." V9:" V9Reg @ .         ENDOF
-        19 OF ." VA:" VAReg @ .         ENDOF
-        20 OF ." VB:" VBReg @ .         ENDOF
-        21 OF ." VC:" VCReg @ .         ENDOF
-        22 OF ." VD:" VDReg @ .         ENDOF
-        23 OF ." VE:" VEReg @ .         ENDOF
-        24 OF ." VF:" VFREg @ .         ENDOF
-        25 OF ." "                      ENDOF
-        26 OF ." "                      ENDOF
+        9  OF ." V0:" $0 VREG@ .            ENDOF
+        10 OF ." V1:" $1 VREG@ .            ENDOF
+        11 OF ." V2:" $2 VREG@ .            ENDOF
+        12 OF ." V3:" $3 VREG@ .            ENDOF
+        13 OF ." V4:" $4 VREG@ .            ENDOF
+        14 OF ." V5:" $5 VREG@ .            ENDOF
+        15 OF ." V6:" $6 VREG@ .            ENDOF
+        16 OF ." V7:" $7 VREG@ .            ENDOF
+        17 OF ." V8:" $8 VREG@ .            ENDOF
+        18 OF ." V9:" $9 VREG@ .            ENDOF
+        19 OF ." VA:" $A VREG@ .            ENDOF
+        20 OF ." VB:" $B VREG@ .            ENDOF
+        21 OF ." VC:" $C VREG@ .            ENDOF
+        22 OF ." VD:" $D VREG@ .            ENDOF
+        23 OF ." VE:" $E VREG@ .            ENDOF
+        24 OF ." VF:" $F VREG@ .            ENDOF
+        25 OF ." "                          ENDOF
+        26 OF ." "                          ENDOF
 
-        27 OF ." DT:" DT    @ .         ENDOF
-        28 OF ." ST:" ST    @ .         ENDOF
-        29 OF ." "                      ENDOF
-        30 OF ." "                      ENDOF
+        27 OF ." DelayTimer:" DelayTimer@ . ENDOF
+        28 OF ." SoundTimer:" SoundTimer@ . ENDOF
+        29 OF ." "                          ENDOF
+        30 OF ." ** STACK **"               ENDOF
 
-        31 OF ." STACK:"   .S           ENDOF
+        31 OF ." STACK:"   .S               ENDOF
     ENDCASE
 ;
 
@@ -392,45 +637,184 @@ VARIABLE drw_y
     32 0 DO
         CR
         64 0 DO
-            J I pixel_address C@ DUP
-            0   = IF ." .." THEN
-            255 = IF ." ##" THEN
+            J I PIXEL@ DUP
+            $00 = IF ." .." THEN
+            $FF = IF ." ##" THEN
         LOOP
         5 SPACES I print_register
     LOOP
 ;
 
-: app_loop
+: main_loop
+    \ start from firts byte of ROM
+    ROM_START PC ! 
+    HEX
     BEGIN
-        PC @ read_opcode
-        to_big_endian_opcode
+        PC @ get_opcode
 
-        HEX
         PAGE
         print_screen
-        DECIMAL
 
         \ CR ." ============================================"
-        \ CR ." DEBUG: Press to execute" CR
+        \ CR ." DEBUG: Press to continue" CR
         \ KEY DROP
 
         \ TODO: implement timer
-        0 DT @ <> IF 
-            30 MS 
-            DT @ 1 - 
-            DT ! 
+        DelayTimer@
+        DUP 0 <> IF
+            100 MS
+            1 - DelayTimer!
+        ELSE
+            DROP
         THEN
-        execute_opcode
+
+        exec_opcode
+        NEXT_INS!
     AGAIN
+    DECIMAL
 ;
 
-0 PC !
+: load_sprites ( -- )
+    \ counter
+    0 >R
 
-S" samples/octojam8title.ch8" R/O BIN OPEN-FILE THROW
-\ S" samples/octojam7title.ch8" R/O BIN OPEN-FILE THROW
+    \ 0x000
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
 
-file_id !
-file_id @ ." DEBUG: file id: " . CR CR
+    \ 0x005
+    %00100000 RAM_MEMORY R@ + C! R> 1 + >R \   * 
+    %01100000 RAM_MEMORY R@ + C! R> 1 + >R \  ** 
+    %00100000 RAM_MEMORY R@ + C! R> 1 + >R \   * 
+    %00100000 RAM_MEMORY R@ + C! R> 1 + >R \   * 
+    %01110000 RAM_MEMORY R@ + C! R> 1 + >R \  ***
 
-frame_buffer 2048 0 FILL
-app_loop
+    \ 0x00A
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %00010000 RAM_MEMORY R@ + C! R> 1 + >R \    *
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10000000 RAM_MEMORY R@ + C! R> 1 + >R \ *   
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+
+    \ 0x00F
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %00010000 RAM_MEMORY R@ + C! R> 1 + >R \    *
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %00010000 RAM_MEMORY R@ + C! R> 1 + >R \    *
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+
+    \ 0x014
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %00010000 RAM_MEMORY R@ + C! R> 1 + >R \    *
+    %00010000 RAM_MEMORY R@ + C! R> 1 + >R \    *
+
+    \ 0x019
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10000000 RAM_MEMORY R@ + C! R> 1 + >R \ *   
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %00010000 RAM_MEMORY R@ + C! R> 1 + >R \    *
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+
+    \ 0x01E
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10000000 RAM_MEMORY R@ + C! R> 1 + >R \ *   
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+
+    \ 0x023
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %00010000 RAM_MEMORY R@ + C! R> 1 + >R \    *
+    %00100000 RAM_MEMORY R@ + C! R> 1 + >R \   * 
+    %01000000 RAM_MEMORY R@ + C! R> 1 + >R \  *  
+    %01000000 RAM_MEMORY R@ + C! R> 1 + >R \  *  
+
+    \ 0x028
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+
+    \ 0x02D
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %00010000 RAM_MEMORY R@ + C! R> 1 + >R \    *
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+
+    \ 0x032
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+
+    \ 0x037
+    %11100000 RAM_MEMORY R@ + C! R> 1 + >R \ *** 
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %11100000 RAM_MEMORY R@ + C! R> 1 + >R \ *** 
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %11100000 RAM_MEMORY R@ + C! R> 1 + >R \ *** 
+
+    \ 0x03C
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10000000 RAM_MEMORY R@ + C! R> 1 + >R \ *   
+    %10000000 RAM_MEMORY R@ + C! R> 1 + >R \ *   
+    %10000000 RAM_MEMORY R@ + C! R> 1 + >R \ *   
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+
+    \ 0x041
+    %11100000 RAM_MEMORY R@ + C! R> 1 + >R \ *** 
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %10010000 RAM_MEMORY R@ + C! R> 1 + >R \ *  *
+    %11100000 RAM_MEMORY R@ + C! R> 1 + >R \ *** 
+
+    \ 0x046
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10000000 RAM_MEMORY R@ + C! R> 1 + >R \ *   
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10000000 RAM_MEMORY R@ + C! R> 1 + >R \ *   
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+
+    \ 0x04B
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10000000 RAM_MEMORY R@ + C! R> 1 + >R \ *   
+    %11110000 RAM_MEMORY R@ + C! R> 1 + >R \ ****
+    %10000000 RAM_MEMORY R@ + C! R> 1 + >R \ *   
+    %10000000 RAM_MEMORY R@ + C! R> 1 + >R \ *   
+
+    \ free return stack
+    R> DROP
+;
+
+: load_rom ( str_addr len -- )
+    R/O BIN OPEN-FILE THROW \ open file
+    DUP FILE-SIZE THROW 2>R \ get file size to return stack as double word
+
+    DUP 0 S>D ROT           \ REPOSITION-FILE takes double word
+    REPOSITION-FILE THROW   \ set start pointer to 0
+    DUP
+
+    \ ROM should starts from 0x200
+    RAM_MEMORY ROM_START +  \ file_id, file_id, output
+    2R> D>S                 \ file_id, file_id, output, file_size
+    ROT                     \ file_id, output, file_size file_id
+    READ-FILE THROW         \ file_id, bytes_read )
+
+    CR ." Bytes read: " . CR
+
+    CLOSE-FILE THROW        \ empty
+;
+
+\ TODO: implement sturtup params
+load_sprites
+S" samples/octojam8title.ch8" load_rom
+\ INS_00E0
+main_loop
