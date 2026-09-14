@@ -6,6 +6,14 @@ $200 CONSTANT ROM_START
 32   CONSTANT DISPLAY_HEIGHT
 64   CONSTANT DISPLAY_WIDTH
 
+\ KEYBOARD
+\ Original layout   My layout
+\   1 2 3 C         Q W E R
+\   4 5 6 D         A S D F
+\   7 8 9 E         Y U I O
+\   A 0 B F         H J K L
+\ I guess I will change it (~)(~)
+
 \ REGISTERS 
 
 VARIABLE PC
@@ -49,16 +57,16 @@ VARIABLE DRW_Y
     RAM_MEMORY + C@
 ;
 
+: RAM!
+    RAM_MEMORY + C!
+;
+
 : COMMAND@
     $F000 AND 12 RSHIFT
 ;
 
 : PARAMS@ ( abcd -- bcd )
     $0FFF AND
-;
-
-: PC ( -- addr )
-    PC
 ;
 
 : PC@ ( -- value )
@@ -126,20 +134,12 @@ VARIABLE DRW_Y
     VREG C!
 ;
 
-: DelayTimer ( -- addr )
-    DelayTimer
-;
-
 : DelayTimer@ ( -- value )
     DelayTimer @
 ;
 
 : DelayTimer! ( value -- )
     DelayTimer !
-;
-
-: SoundTimer ( -- addr )
-    SoundTimer
 ;
 
 : SoundTimer@ ( -- value )
@@ -153,7 +153,9 @@ VARIABLE DRW_Y
 \ DISPLAY
 \ TODO: overlapping
 : PIXEL ( y x -- addr )
-    32 * + DISPLAY_BUFFER +
+    DISPLAY_WIDTH MOD SWAP
+    DISPLAY_HEIGHT MOD
+    DISPLAY_WIDTH * + DISPLAY_BUFFER +
 ;
 
 : PIXEL@ ( y x -- value )
@@ -191,6 +193,30 @@ VARIABLE DRW_Y
     THEN
     dup random_seed !
     $FF AND
+;
+
+: Y ( xy -- y_reg_num )
+    $00F0 AND 4 RSHIFT
+;
+
+: Y@ ( xy -- y )
+    Y VREG@
+;
+
+: Y! ( value xy -- )
+    Y VREG!
+;
+
+: X ( xy -- x_reg_num )
+    $0F00 AND 8 RSHIFT
+;
+
+: X@ ( xy -- x )
+    X VREG@
+;
+
+: X! ( value xy -- )
+    X VREG!
 ;
 
 : DRW_X@ ( -- value )
@@ -239,9 +265,7 @@ VARIABLE DRW_Y
 \ SE - skip next instruction if Vx == kk
 : INS_3xkk ( x kk -- )
     DUP $00FF AND SWAP
-    $0F00 AND 8 RSHIFT
-
-    VREG@
+    X@
     = IF            \ if Vx == kk
         NEXT_INS!
     THEN
@@ -250,9 +274,7 @@ VARIABLE DRW_Y
 \ SNE - skip next instruction if Vx != kk
 : INS_4xkk ( x kk -- )
     DUP $00FF AND SWAP
-    $0F00 AND 8 RSHIFT
-
-    VREG@
+    X@
     <> IF           \ if Vx != kk
         NEXT_INS! 
     THEN
@@ -260,14 +282,8 @@ VARIABLE DRW_Y
 
 \ SE - skip next instruction if Vx == Vy
 : INS_5xy0 ( x y -- )
-    DUP $0F00 AND 16 RSHIFT 
-    VREG@
-
-    SWAP
-
-    $00F0 AND 8 RSHIFT
-    VREG@
-
+    DUP
+    X@ SWAP Y@
     = IF            \ if Vx == Vy
         NEXT_INS!
     THEN
@@ -276,117 +292,120 @@ VARIABLE DRW_Y
 \ LD - Vx = kk
 : INS_6xkk ( x kk -- )
     DUP $00FF AND SWAP
-
-    $0F00 AND 8 RSHIFT
-    VREG!
+    X!
 ;
 
 \ ADD - Vx = Vx + kk
 : INS_7xkk ( x kk -- )
-    DUP $00FF AND SWAP
-
-    $0F00 AND 8 RSHIFT
-    VREG DUP @ 
+    DUP $00FF AND 
+    SWAP
+    X VREG DUP @
     ROT + SWAP !
 ;
 
 \ LD - Vx = Vy
 : INS_8xy0 ( x y -- )
-    DUP $00F0 AND 8 RSHIFT
-    VREG@
-
+    DUP Y@
     SWAP
-
-    $0F00 AND 16 RSHIFT 
-    VREG@
-
-    + VREG!
+    X VREG DUP @
+    ROT + SWAP !
 ;
 
 \ OR - Vx or Vy
 : INS_8xy1 ( x y -- )
-    DUP $00F0 AND 8 RSHIFT
-    VREG@
-
+    DUP Y@
     SWAP
-
-    $0F00 AND 16 RSHIFT 
-    VREG@
-
-    OR VREG!
+    X VREG DUP @
+    ROT OR SWAP !
 ;
 
 \ AND - Vx and Vy
 : INS_8xy2 ( x y -- )
-    DUP $00F0 AND 8 RSHIFT
-    VREG@
-
+    DUP Y@
     SWAP
-
-    $0F00 AND 16 RSHIFT 
-    VREG@
-
-    AND VREG!
+    X VREG DUP @
+    ROT AND SWAP !
 ;
 
-\ XOR
+\ XOR - Vx xor VY
 : INS_8xy3 ( x y -- )
-    DUP $00F0 AND 8 RSHIFT
-    VREG@
-
+    DUP Y@
     SWAP
-
-    $0F00 AND 16 RSHIFT 
-    VREG@
-
-    XOR VREG!
+    X VREG DUP @
+    ROT XOR SWAP !
 ;
 
 \ ADD - Vx = Vx + Vy, VF = carry
 : INS_8xy4 ( x y -- )
-    DUP $00F0 AND 8 RSHIFT
-    VREG@
-
+    DUP Y@
     SWAP
+    X VREG DUP @
+    ROT +
 
-    $0F00 AND 16 RSHIFT 
-    VREG@
-
-    + DUP $FF > IF 
+    DUP $FF > IF
         1 $F VREG!
+    ELSE
+        0 $F VREG!
     THEN
-    $FF AND VREG!
+    $FF AND SWAP !      \ only lowest 8 bits
 ;
 
 \ SUB - Vx = Vx - Vy, VF = NOT borrow
 : INS_8xy5 ( x y -- )
+    DUP Y@
+    SWAP
+    X VREG DUP @
+    ROT
+    2DUP > IF           \ if Vx > Vy => Vf = 1
+        1 $F VREG!
+    ELSE
+        0 $F VREG!
+    THEN
+    - SWAP !
 ;
 
 \ SHR - Vx = Vx SHR 1
 : INS_8xy6 ( x y -- )
+    X VREG DUP @
+    DUP %00000001 AND 1 IF
+        1 $F VREG!
+    ELSE
+        0 $F VREG!
+    THEN
+    1 RSHIFT SWAP !
 ;
 
 \ SUBN - Vx = Vy - Vx, VF = NOT borrow
 : INS_8xy7 ( x y -- )
+    DUP Y@
+    SWAP
+    X VREG DUP @
+    ROT
+    2DUP < IF           \ if Vx > Vy => Vf = 1
+        0 $F VREG!
+    ELSE
+        1 $F VREG!
+    THEN
+    SWAP - SWAP !
 ;
 
 \ SHL - Vx = Vx SHL 1
 : INS_8xyE ( x y -- )
+    X VREG DUP @
+    DUP %10000000 AND 1 IF
+        1 $F VREG!
+    ELSE
+        0 $F VREG!
+    THEN
+    1 LSHIFT SWAP !
 ;
 
-\ SNE - Skip next instruction if Vx != Vy.
+\ SNE - Skip next instruction if Vx != Vy
 : INS_9xy0 ( x y -- )
-    DUP $0F00 AND 16 RSHIFT 
-    VREG@
-
-    SWAP
-
-    $00F0 AND 8 RSHIFT
-    VREG@
-
+    DUP
+    X@ SWAP Y@
     <> IF            \ if Vx != Vy
-        PC @ 2 + 
-        PC ! 
+        NEXT_INS! 
     THEN
 ;
 
@@ -406,19 +425,15 @@ VARIABLE DRW_Y
     DUP $00FF AND
     RANDOM8@ AND
     SWAP
-    $0F00 AND 8 RSHIFT
-    VREG !
+    X!
 ;
 
 \ DRW - Display n byte sprite from I at Vx, Vy, Set VF = collision
 : INS_Dxyn ( x y n -- )
-    0 $F VREG!  \ set 0 to VF register
+    0 $F VREG!      \ set 0 to VF register
 
-    DUP $0F00 AND 8 RSHIFT
-    VREG@ DRW_X!
-
-    DUP $00F0 AND 4 RSHIFT
-    VREG@ DRW_Y!
+    DUP X@ DRW_X!
+    DUP Y@ DRW_Y!
 
     $F AND 0 DO
         IREG@ I + RAM@
@@ -438,73 +453,100 @@ VARIABLE DRW_Y
 \ SKP - Skip next instution if key with the value of Vx is pressed
 : INS_Ex9E ( x -- )
     \ TODO: keyboard check
-    DUP $0F00 AND 8 RSHIFT
-    VREG@
-    KEY = IF 
-        NEXT_INS!
-    THEN
+    CR ." WARNING: Keyboard check is not implemented yet"
+    KEY DROP
+    DROP
 ;
 
 \ SKNP - Skip next instution if key with the value of Vx is not pressed
 : INS_ExA1 ( x -- )
     \ TODO: keyboard check
-    DUP $0F00 AND 8 RSHIFT
-    VREG@
-    KEY <> IF 
-        NEXT_INS!
-    THEN
+    CR ." WARNING: Keyboard check is not implemented yet"
+    KEY DROP
+    DROP
 ;
 
 \ LD Vx DT - Set Vx = delay timer value
 : INS_Fx07 ( x -- )
-    $0F00 AND 8 RSHIFT
-    DelayTimer@ SWAP VREG!
+    DelayTimer@ SWAP X!
 ;
 
 \ LD Vx - Wait for a key press, store the value of the key in Vx
 : INS_Fx0A ( x -- )
-    \ TODO: keyboard capture
-    $0F00 AND 8 RSHIFT
-    KEY SWAP VREG!
+    X KEY
+    CASE
+        [CHAR] Q OF $1 ENDOF
+        [CHAR] W OF $2 ENDOF
+        [CHAR] E OF $3 ENDOF
+        [CHAR] R OF $C ENDOF
+
+        [CHAR] A OF $4 ENDOF
+        [CHAR] S OF $5 ENDOF
+        [CHAR] D OF $6 ENDOF
+        [CHAR] F OF $D ENDOF
+
+        [CHAR] Y OF $7 ENDOF
+        [CHAR] U OF $8 ENDOF
+        [CHAR] I OF $9 ENDOF
+        [CHAR] O OF $E ENDOF
+
+        [CHAR] H OF $A ENDOF
+        [CHAR] J OF $0 ENDOF
+        [CHAR] K OF $B ENDOF
+        [CHAR] L OF $F ENDOF
+    ENDCASE
+    SWAP VREG!
 ;
 
 \ LD DT Vx - Set delay timer = Vx
 : INS_Fx15 ( x -- )
-    $0F00 AND 8 RSHIFT
-    VREG@ DelayTimer!
+    X@ DelayTimer!
 ;
 
 \ LD ST Vx - Set sound timer = Vx
 : INS_Fx18 ( x -- )
-    $0F00 AND 8 RSHIFT
-    VREG@ SoundTimer!
+    X@ SoundTimer!
 ;
 
 \ ADD I - Set I = I + Vx
 : INS_Fx1E ( x -- )
-    $0F00 AND 8 RSHIFT
-    VREG@ IREG@ + IREG!
+    X@ IREG@ + IREG!
 ;
 
 \ LD F Vx - Set I = location of sprite for digit Vx
 : INS_Fx29 ( x -- )
-    $0F00 AND 8 RSHIFT VREG@
+    X@
     5 * SPRITE_START + IREG!
 ;
 
-\ LD B Vx - Store BCD representation of Vx in memory locations I, I+1, and I+2.
+\ LD B Vx - Store BCD representation of Vx in memory locations I, I+1, and I+2
 : INS_Fx33 ( x -- )
-    \ TODO:;
+    X@
+    10 /MOD  \ ones , tens-hundreds
+    10 /MOD  \ ones , tens , hundreds
+
+    IREG     C!
+    IREG 1 + C!
+    IREG 2 + C!
 ;
 
 \ LD [I] Vx - Store registers V0 through Vx in memory starting at location I
 : INS_Fx55
-    \ TODO:;
+    X
+    0 DO
+        I VREG@
+        IREG@ I + RAM!
+    LOOP
 ;
 
 \ LD Vx [I] - Read registers V0 through Vx from memory starting at location I
+\ TODO: fix error 3 title
 : INS_Fx65
-    \ TODO:;
+    X
+    0 DO
+        IREG@ I + RAM@
+        I VREG!
+    LOOP
 ;
 
 : CALL_0 ( params -- )
@@ -561,9 +603,7 @@ VARIABLE DRW_Y
 
 : exec_opcode
     DUP PARAMS@
-    CR ." DEBUG: Params:  " DUP .
     SWAP COMMAND@
-    CR ." DEBUG: Command: " DUP .
 
     CASE
         $0 OF CALL_0                ENDOF
@@ -634,13 +674,15 @@ VARIABLE DRW_Y
 ;
 
 : print_screen
+    27 EMIT ." [H"
     32 0 DO
-        CR
+        CR ." |"
         64 0 DO
             J I PIXEL@ DUP
-            $00 = IF ." .." THEN
-            $FF = IF ." ##" THEN
+            $00 = IF ."   " THEN
+            $FF = IF ." ██" THEN
         LOOP
+        ." |"
         5 SPACES I print_register
     LOOP
 ;
@@ -652,7 +694,7 @@ VARIABLE DRW_Y
     BEGIN
         PC @ get_opcode
 
-        PAGE
+        \ PAGE
         print_screen
 
         \ CR ." ============================================"
@@ -662,7 +704,7 @@ VARIABLE DRW_Y
         \ TODO: implement timer
         DelayTimer@
         DUP 0 <> IF
-            100 MS
+            16 MS
             1 - DelayTimer!
         ELSE
             DROP
@@ -674,6 +716,7 @@ VARIABLE DRW_Y
     DECIMAL
 ;
 
+\ Probably it is not original sprites
 : load_sprites ( -- )
     \ counter
     0 >R
@@ -813,8 +856,14 @@ VARIABLE DRW_Y
     CLOSE-FILE THROW        \ empty
 ;
 
-\ TODO: implement sturtup params
 load_sprites
-S" samples/octojam8title.ch8" load_rom
-\ INS_00E0
+NEXT-ARG load_rom
+INS_00E0
 main_loop
+
+\ ROMs with errors:
+\ 1 - key capture
+\ 3 - wrong memory address at Fx65 instruction
+\ 4 - graphical artifacts. I don't know where is error
+\ 7 - strange picture. I don't know where is error
+\ 9 - graphical artifacts. I don't know where is error
