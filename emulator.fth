@@ -392,7 +392,7 @@ VARIABLE DRW_Y
 \ SHL - Vx = Vx SHL 1
 : INS_8xyE ( x y -- )
     X VREG DUP @
-    DUP %10000000 AND 1 IF
+    DUP %1000 AND IF
         1 $F VREG!
     ELSE
         0 $F VREG!
@@ -543,10 +543,11 @@ VARIABLE DRW_Y
 \ TODO: fix error 3 title
 : INS_Fx65
     X
-    0 DO
+    $10 0 DO
         IREG@ I + RAM@
         I VREG!
     LOOP
+    DROP
 ;
 
 : CALL_0 ( params -- )
@@ -697,9 +698,9 @@ VARIABLE DRW_Y
         \ PAGE
         print_screen
 
-        \ CR ." ============================================"
-        \ CR ." DEBUG: Press to continue" CR
-        \ KEY DROP
+        CR ." ============================================"
+        CR ." DEBUG: Press to continue" CR
+        KEY DROP
 
         \ TODO: implement timer
         DelayTimer@
