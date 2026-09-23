@@ -534,17 +534,16 @@ VARIABLE PREV_OC
 \ LD [I] Vx - Store registers V0 through Vx in memory starting at location I
 : INS_Fx55
     X
-    0 DO
+    DUP 1+ 0 DO
         I VREG@
         IREG@ I + RAM!
     LOOP
 ;
 
 \ LD Vx [I] - Read registers V0 through Vx from memory starting at location I
-\ TODO: fix error 3 title
 : INS_Fx65
     X
-    $10 0 DO
+    DUP 1+ 0 DO
         IREG@ I + RAM@
         I VREG!
     LOOP
@@ -690,18 +689,6 @@ VARIABLE PREV_OC
     LOOP
 ;
 
-\ : print_screen_debug
-\     27 EMIT ." [H"
-\     32 0 DO
-\         CR
-\         64 0 DO
-\             J I PIXEL@
-\             DUP $00 = IF ."   " DROP ELSE . THEN
-\         LOOP
-\         2 SPACES I print_register
-\     LOOP
-\ ;
-
 : main_loop
     \ start from firts byte of ROM
     ROM_START PC ! 
@@ -709,9 +696,8 @@ VARIABLE PREV_OC
     BEGIN
         PC @ get_opcode
 
-        print_screen
         \ PAGE
-        \ print_screen_debug
+        print_screen
 
         \ CR ." ============================================"
         \ CR ." DEBUG: Press to continue" CR
@@ -872,6 +858,7 @@ VARIABLE PREV_OC
     CLOSE-FILE THROW        \ empty
 ;
 
+RAM_MEMORY 4096 0 FILL
 load_sprites
 NEXT-ARG load_rom
 INS_00E0
@@ -879,7 +866,4 @@ main_loop
 
 \ ROMs with errors:
 \ 1 - key capture
-\ 3 - wrong memory address at Fx65 instruction
-\ 4 - graphical artifacts. I don't know where is error
-\ 7 - strange picture. I don't know where is error
-\ 9 - graphical artifacts. I don't know where is error
+\ 3 - something wrong with the picture
