@@ -909,6 +909,8 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
     BEGIN
         PC @ get_opcode
 
+        \ TODO: do something with controls
+        5 MS
         POLL_KEYS
 
         \ PAGE
@@ -1078,6 +1080,3 @@ load_sprites
 NEXT-ARG load_rom
 INS_00E0
 main_loop
-
-\ ROMs with errors:
-\ 1 - key capture
