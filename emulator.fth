@@ -9,6 +9,7 @@ $200  CONSTANT ROM_START
 32    CONSTANT DISPLAY_HEIGHT
 64    CONSTANT DISPLAY_WIDTH
 16384 CONSTANT OUT_BUFFER_SIZE
+16    CONSTANT KEY_COUNT
 
 \ KEYBOARD
 \ Original layout   My layout
@@ -17,6 +18,9 @@ $200  CONSTANT ROM_START
 \   7 8 9 E         Y U I O
 \   A 0 B F         H J K L
 \ I guess I will change it (~)(~)
+
+CREATE KEY_STATE KEY_COUNT ALLOT
+
 
 \ REGISTERS 
 
@@ -275,6 +279,58 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
     DRW_Y !
 ;
 
+: KEY_RESET ( -- )
+    KEY_STATE KEY_COUNT ERASE
+;
+
+: KEY! ( 0/1 key -- )
+    KEY_STATE + C!
+;
+
+: KEY@ ( key -- state )
+    KEY_STATE + C@
+;
+
+: KEY_DOWN? ( key -- flag )
+    KEY@ 0 <>
+;
+
+: ASCII>KEY ( char -- key true/false )
+    CASE
+        [CHAR] q OF $1 TRUE ENDOF
+        [CHAR] w OF $2 TRUE ENDOF
+        [CHAR] e OF $3 TRUE ENDOF
+        [CHAR] r OF $C TRUE ENDOF
+
+        [CHAR] a OF $4 TRUE ENDOF
+        [CHAR] s OF $5 TRUE ENDOF
+        [CHAR] d OF $6 TRUE ENDOF
+        [CHAR] f OF $D TRUE ENDOF
+
+        [CHAR] y OF $7 TRUE ENDOF
+        [CHAR] u OF $8 TRUE ENDOF
+        [CHAR] i OF $9 TRUE ENDOF
+        [CHAR] o OF $E TRUE ENDOF
+
+        [CHAR] h OF $A TRUE ENDOF
+        [CHAR] j OF $0 TRUE ENDOF
+        [CHAR] k OF $B TRUE ENDOF
+        [CHAR] l OF $F TRUE ENDOF
+
+        FALSE SWAP
+    ENDCASE
+;
+
+: POLL_KEYS ( -- )
+    KEY_RESET
+    BEGIN
+        KEY?
+    WHILE
+        KEY ASCII>KEY
+        IF 1 SWAP KEY! THEN
+    REPEAT
+;
+
 \ INSTRUCTIONS
 
 \ SYS - jump to address
@@ -491,18 +547,14 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
 
 \ SKP - Skip next instution if key with the value of Vx is pressed
 : INS_Ex9E ( x -- )
-    \ TODO: keyboard check
-    CR ." WARNING: Keyboard check is not implemented yet"
-    KEY DROP
-    DROP
+    X@
+    KEY_DOWN? 0 <> IF NEXT_INS! THEN
 ;
 
 \ SKNP - Skip next instution if key with the value of Vx is not pressed
 : INS_ExA1 ( x -- )
-    \ TODO: keyboard check
-    CR ." WARNING: Keyboard check is not implemented yet"
-    KEY DROP
-    DROP
+    X@
+    KEY_DOWN? 0 = IF NEXT_INS! THEN
 ;
 
 \ LD Vx DT - Set Vx = delay timer value
@@ -513,27 +565,7 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
 \ LD Vx - Wait for a key press, store the value of the key in Vx
 : INS_Fx0A ( x -- )
     X KEY
-    CASE
-        [CHAR] Q OF $1 ENDOF
-        [CHAR] W OF $2 ENDOF
-        [CHAR] E OF $3 ENDOF
-        [CHAR] R OF $C ENDOF
-
-        [CHAR] A OF $4 ENDOF
-        [CHAR] S OF $5 ENDOF
-        [CHAR] D OF $6 ENDOF
-        [CHAR] F OF $D ENDOF
-
-        [CHAR] Y OF $7 ENDOF
-        [CHAR] U OF $8 ENDOF
-        [CHAR] I OF $9 ENDOF
-        [CHAR] O OF $E ENDOF
-
-        [CHAR] H OF $A ENDOF
-        [CHAR] J OF $0 ENDOF
-        [CHAR] K OF $B ENDOF
-        [CHAR] L OF $F ENDOF
-    ENDCASE
+    ASCII>KEY DROP
     SWAP VREG!
 ;
 
@@ -672,19 +704,148 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
     OR
 ;
 
+: key_highlight_on ( -- )
+    27 OUT_BUFFER_C!
+    S" [30;47m" OUT_BUFFER!
+;
+
+: key_highlight_off ( -- )
+    27 OUT_BUFFER_C!
+    S" [0m" OUT_BUFFER!
+;
+
+: print_key ( key char -- )
+    OVER KEY_DOWN? IF
+        key_highlight_on
+
+        BL OUT_BUFFER_C!
+        NIP OUT_BUFFER_C!
+        BL OUT_BUFFER_C!
+
+        key_highlight_off
+    ELSE
+        BL OUT_BUFFER_C!
+        NIP OUT_BUFFER_C!
+        BL OUT_BUFFER_C!
+    THEN
+;
+
+: print_keyboard_row_1
+    S" |" OUT_BUFFER!
+
+    $1 [CHAR] 1 print_key
+    S" |" OUT_BUFFER!
+
+    $2 [CHAR] 2 print_key
+    S" |" OUT_BUFFER!
+
+    $3 [CHAR] 3 print_key
+    S" |" OUT_BUFFER!
+
+    $C [CHAR] C print_key
+    S" |" OUT_BUFFER!
+;
+
+: print_keyboard_row_2
+    S" |" OUT_BUFFER!
+
+    $4 [CHAR] 4 print_key
+    S" |" OUT_BUFFER!
+
+    $5 [CHAR] 5 print_key
+    S" |" OUT_BUFFER!
+
+    $6 [CHAR] 6 print_key
+    S" |" OUT_BUFFER!
+
+    $D [CHAR] D print_key
+    S" |" OUT_BUFFER!
+;
+
+: print_keyboard_row_3
+    S" |" OUT_BUFFER!
+
+    $7 [CHAR] 7 print_key
+    S" |" OUT_BUFFER!
+
+    $8 [CHAR] 8 print_key
+    S" |" OUT_BUFFER!
+
+    $9 [CHAR] 9 print_key
+    S" |" OUT_BUFFER!
+
+    $E [CHAR] E print_key
+    S" |" OUT_BUFFER!
+;
+
+: print_keyboard_row_4
+    S" |" OUT_BUFFER!
+
+    $A [CHAR] A print_key
+    S" |" OUT_BUFFER!
+
+    $0 [CHAR] 0 print_key
+    S" |" OUT_BUFFER!
+
+    $B [CHAR] B print_key
+    S" |" OUT_BUFFER!
+
+    $F [CHAR] F print_key
+    S" |" OUT_BUFFER!
+;
+
+: print_keyboard
+    CASE
+        0  OF ENDOF
+        1  OF ENDOF
+        2  OF ENDOF
+        3  OF ENDOF
+        4  OF ENDOF
+        5  OF ENDOF
+        6  OF ENDOF
+        7  OF ENDOF
+        8  OF ENDOF
+        9  OF ENDOF
+
+        10 OF S"  ** KEYBOARD **" OUT_BUFFER!   ENDOF
+        11 OF print_keyboard_row_1              ENDOF
+        12 OF print_keyboard_row_2              ENDOF
+        13 OF print_keyboard_row_3              ENDOF
+        14 OF print_keyboard_row_4              ENDOF
+
+        15 OF ENDOF
+        16 OF ENDOF
+        17 OF ENDOF
+        18 OF ENDOF
+        19 OF ENDOF
+        20 OF ENDOF
+        21 OF ENDOF
+        22 OF ENDOF
+        23 OF ENDOF
+        24 OF ENDOF
+        25 OF ENDOF
+        26 OF ENDOF
+        27 OF ENDOF
+        28 OF ENDOF
+        29 OF ENDOF
+        30 OF ENDOF
+        31 OF ENDOF
+    ENDCASE
+;
+
 : print_register
     CASE
-        0  OF S" "      OUT_BUFFER!                             ENDOF
+        0  OF                                                   ENDOF
         1  OF S" ** REGISTERS INFO **" OUT_BUFFER!              ENDOF
-        2  OF S" "      OUT_BUFFER!                             ENDOF
+        2  OF                                                   ENDOF
 
         3  OF S" P_OC:" OUT_BUFFER! PREV_OC @   OUT_BUFFER_U!   ENDOF
         4  OF S" OC:"   OUT_BUFFER! DUP         OUT_BUFFER_U!   ENDOF
         5  OF S" PC:"   OUT_BUFFER! PC@         OUT_BUFFER_U!   ENDOF
-        6  OF S" "      OUT_BUFFER!                             ENDOF
+        6  OF                                                   ENDOF
 
         7  OF S" I: "   OUT_BUFFER! IREG@       OUT_BUFFER_U!   ENDOF
-        8  OF S" "      OUT_BUFFER!                             ENDOF
+        8  OF                                                   ENDOF
 
         9  OF S" V0:"   OUT_BUFFER! $0 VREG@    OUT_BUFFER_U!   ENDOF
         10 OF S" V1:"   OUT_BUFFER! $1 VREG@    OUT_BUFFER_U!   ENDOF
@@ -702,12 +863,12 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
         22 OF S" VD:"   OUT_BUFFER! $D VREG@    OUT_BUFFER_U!   ENDOF
         23 OF S" VE:"   OUT_BUFFER! $E VREG@    OUT_BUFFER_U!   ENDOF
         24 OF S" VF:"   OUT_BUFFER! $F VREG@    OUT_BUFFER_U!   ENDOF
-        25 OF S" "      OUT_BUFFER!                             ENDOF
-        26 OF S" "      OUT_BUFFER!                             ENDOF
+        25 OF                                                   ENDOF
+        26 OF                                                   ENDOF
 
         27 OF S" DelayTimer:"   OUT_BUFFER! DelayTimer@ OUT_BUFFER_U!   ENDOF
         28 OF S" SoundTimer:"   OUT_BUFFER! SoundTimer@ OUT_BUFFER_U!   ENDOF
-        29 OF S" "              OUT_BUFFER!                             ENDOF
+        29 OF                                                           ENDOF
         30 OF S" ** STACK **"   OUT_BUFFER!                             ENDOF
 
         31 OF S" STACK:"        OUT_BUFFER!             OUT_BUFFER_S!   ENDOF
@@ -734,6 +895,8 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
 
         S"      " OUT_BUFFER! \ 5 SPACES
         I print_register
+        S"                  " OUT_BUFFER!
+        I print_keyboard
     LOOP
 
     OUT_BUFFER OUT_BUFFER_LEN TYPE
@@ -745,6 +908,8 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
     HEX
     BEGIN
         PC @ get_opcode
+
+        POLL_KEYS
 
         \ PAGE
         print_screen
