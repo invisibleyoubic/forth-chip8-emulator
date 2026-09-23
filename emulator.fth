@@ -53,6 +53,8 @@ CREATE DISPLAY_BUFFER 2048 ALLOT
 VARIABLE DRW_X
 VARIABLE DRW_Y
 
+VARIABLE PREV_OC
+
 : RAM@
     RAM_MEMORY + C@
 ;
@@ -299,47 +301,46 @@ VARIABLE DRW_Y
 : INS_7xkk ( x kk -- )
     DUP $00FF AND 
     SWAP
-    X VREG DUP @
-    ROT + SWAP !
+    X VREG DUP C@
+    ROT + SWAP C!
 ;
 
 \ LD - Vx = Vy
 : INS_8xy0 ( x y -- )
     DUP Y@
     SWAP
-    X VREG DUP @
-    ROT + SWAP !
+    X!
 ;
 
 \ OR - Vx or Vy
 : INS_8xy1 ( x y -- )
     DUP Y@
     SWAP
-    X VREG DUP @
-    ROT OR SWAP !
+    X VREG DUP C@
+    ROT OR SWAP C!
 ;
 
 \ AND - Vx and Vy
 : INS_8xy2 ( x y -- )
     DUP Y@
     SWAP
-    X VREG DUP @
-    ROT AND SWAP !
+    X VREG DUP C@
+    ROT AND SWAP C!
 ;
 
 \ XOR - Vx xor VY
 : INS_8xy3 ( x y -- )
     DUP Y@
     SWAP
-    X VREG DUP @
-    ROT XOR SWAP !
+    X VREG DUP C@
+    ROT XOR SWAP C!
 ;
 
 \ ADD - Vx = Vx + Vy, VF = carry
 : INS_8xy4 ( x y -- )
     DUP Y@
     SWAP
-    X VREG DUP @
+    X VREG DUP C@
     ROT +
 
     DUP $FF > IF
@@ -347,39 +348,39 @@ VARIABLE DRW_Y
     ELSE
         0 $F VREG!
     THEN
-    $FF AND SWAP !      \ only lowest 8 bits
+    $FF AND SWAP C!      \ only lowest 8 bits
 ;
 
 \ SUB - Vx = Vx - Vy, VF = NOT borrow
 : INS_8xy5 ( x y -- )
     DUP Y@
     SWAP
-    X VREG DUP @
+    X VREG DUP C@
     ROT
     2DUP > IF           \ if Vx > Vy => Vf = 1
         1 $F VREG!
     ELSE
         0 $F VREG!
     THEN
-    - SWAP !
+    - SWAP C!
 ;
 
 \ SHR - Vx = Vx SHR 1
 : INS_8xy6 ( x y -- )
-    X VREG DUP @
-    DUP %00000001 AND 1 IF
+    X VREG DUP C@
+    DUP %0001 AND IF
         1 $F VREG!
     ELSE
         0 $F VREG!
     THEN
-    1 RSHIFT SWAP !
+    1 RSHIFT SWAP C!
 ;
 
 \ SUBN - Vx = Vy - Vx, VF = NOT borrow
 : INS_8xy7 ( x y -- )
     DUP Y@
     SWAP
-    X VREG DUP @
+    X VREG DUP C@
     ROT
     2DUP < IF           \ if Vx > Vy => Vf = 1
         0 $F VREG!
@@ -391,7 +392,7 @@ VARIABLE DRW_Y
 
 \ SHL - Vx = Vx SHL 1
 : INS_8xyE ( x y -- )
-    X VREG DUP @
+    X VREG DUP C@
     DUP %1000 AND IF
         1 $F VREG!
     ELSE
@@ -568,6 +569,7 @@ VARIABLE DRW_Y
 : CALL_8
     DUP $000F AND
     CASE
+        $0 OF INS_8xy0 ENDOF
         $1 OF INS_8xy1 ENDOF
         $2 OF INS_8xy2 ENDOF
         $3 OF INS_8xy3 ENDOF
@@ -603,6 +605,7 @@ VARIABLE DRW_Y
 ;
 
 : exec_opcode
+    DUP PREV_OC ! 
     DUP PARAMS@
     SWAP COMMAND@
 
@@ -637,8 +640,8 @@ VARIABLE DRW_Y
         0  OF ." "                          ENDOF
         1  OF ." ** REGISTERS INFO **"      ENDOF
         2  OF ." "                          ENDOF
-        3  OF ." "                          ENDOF
 
+        3  OF ." P_OC:" PREV_OC @ .         ENDOF
         4  OF ." OC:" DUP .                 ENDOF
         5  OF ." PC:" PC@ .                 ENDOF
         6  OF ." "                          ENDOF
@@ -677,16 +680,27 @@ VARIABLE DRW_Y
 : print_screen
     27 EMIT ." [H"
     32 0 DO
-        CR ." |"
+        CR
         64 0 DO
             J I PIXEL@ DUP
             $00 = IF ."   " THEN
             $FF = IF ." ██" THEN
         LOOP
-        ." |"
         5 SPACES I print_register
     LOOP
 ;
+
+\ : print_screen_debug
+\     27 EMIT ." [H"
+\     32 0 DO
+\         CR
+\         64 0 DO
+\             J I PIXEL@
+\             DUP $00 = IF ."   " DROP ELSE . THEN
+\         LOOP
+\         2 SPACES I print_register
+\     LOOP
+\ ;
 
 : main_loop
     \ start from firts byte of ROM
@@ -695,12 +709,13 @@ VARIABLE DRW_Y
     BEGIN
         PC @ get_opcode
 
-        \ PAGE
         print_screen
+        \ PAGE
+        \ print_screen_debug
 
-        CR ." ============================================"
-        CR ." DEBUG: Press to continue" CR
-        KEY DROP
+        \ CR ." ============================================"
+        \ CR ." DEBUG: Press to continue" CR
+        \ KEY DROP
 
         \ TODO: implement timer
         DelayTimer@
