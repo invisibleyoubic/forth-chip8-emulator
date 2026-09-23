@@ -1,10 +1,14 @@
 VARIABLE random_seed 1 
          random_seed !
 
-$0   CONSTANT SPRITE_START
-$200 CONSTANT ROM_START
-32   CONSTANT DISPLAY_HEIGHT
-64   CONSTANT DISPLAY_WIDTH
+VARIABLE PREV_OC 0
+         PREV_OC !
+
+$0    CONSTANT SPRITE_START
+$200  CONSTANT ROM_START
+32    CONSTANT DISPLAY_HEIGHT
+64    CONSTANT DISPLAY_WIDTH
+16384 CONSTANT OUT_BUFFER_SIZE
 
 \ KEYBOARD
 \ Original layout   My layout
@@ -53,7 +57,9 @@ CREATE DISPLAY_BUFFER 2048 ALLOT
 VARIABLE DRW_X
 VARIABLE DRW_Y
 
-VARIABLE PREV_OC
+CREATE OUT_BUFFER OUT_BUFFER_SIZE ALLOT
+VARIABLE OUT_BUFFER_PTR OUT_BUFFER
+         OUT_BUFFER_PTR !
 
 : RAM@
     RAM_MEMORY + C@
@@ -182,6 +188,37 @@ VARIABLE PREV_OC
         THEN
     THEN
     SWAP C!             \ set XORed value to pixel
+;
+
+: OUT_BUFFER_RESET ( -- )
+    OUT_BUFFER OUT_BUFFER_PTR !
+;
+
+: OUT_BUFFER! ( addr len -- )
+    DUP ROT SWAP
+    OUT_BUFFER_PTR @ SWAP MOVE
+    OUT_BUFFER_PTR +!
+;
+
+: OUT_BUFFER_C! ( char -- )
+    OUT_BUFFER_PTR @ C!
+    1 OUT_BUFFER_PTR +!
+;
+
+: OUT_BUFFER_U! ( u -- )
+    0 <# #S #>
+    OUT_BUFFER!
+;
+
+: OUT_BUFFER_S! ( -- ) 
+    DEPTH 0 ?DO
+        DEPTH 1- I - PICK OUT_BUFFER_U!
+        S"  " OUT_BUFFER!
+    LOOP
+;
+
+: OUT_BUFFER_LEN ( -- len )
+    OUT_BUFFER_PTR @ OUT_BUFFER -
 ;
 
 \ HELPERS
@@ -636,57 +673,69 @@ VARIABLE PREV_OC
 
 : print_register
     CASE
-        0  OF ." "                          ENDOF
-        1  OF ." ** REGISTERS INFO **"      ENDOF
-        2  OF ." "                          ENDOF
+        0  OF S" "      OUT_BUFFER!                             ENDOF
+        1  OF S" ** REGISTERS INFO **" OUT_BUFFER!              ENDOF
+        2  OF S" "      OUT_BUFFER!                             ENDOF
 
-        3  OF ." P_OC:" PREV_OC @ .         ENDOF
-        4  OF ." OC:" DUP .                 ENDOF
-        5  OF ." PC:" PC@ .                 ENDOF
-        6  OF ." "                          ENDOF
+        3  OF S" P_OC:" OUT_BUFFER! PREV_OC @   OUT_BUFFER_U!   ENDOF
+        4  OF S" OC:"   OUT_BUFFER! DUP         OUT_BUFFER_U!   ENDOF
+        5  OF S" PC:"   OUT_BUFFER! PC@         OUT_BUFFER_U!   ENDOF
+        6  OF S" "      OUT_BUFFER!                             ENDOF
 
-        7  OF ." I: " IREG@ .               ENDOF
-        8  OF ." "                          ENDOF
+        7  OF S" I: "   OUT_BUFFER! IREG@       OUT_BUFFER_U!   ENDOF
+        8  OF S" "      OUT_BUFFER!                             ENDOF
 
-        9  OF ." V0:" $0 VREG@ .            ENDOF
-        10 OF ." V1:" $1 VREG@ .            ENDOF
-        11 OF ." V2:" $2 VREG@ .            ENDOF
-        12 OF ." V3:" $3 VREG@ .            ENDOF
-        13 OF ." V4:" $4 VREG@ .            ENDOF
-        14 OF ." V5:" $5 VREG@ .            ENDOF
-        15 OF ." V6:" $6 VREG@ .            ENDOF
-        16 OF ." V7:" $7 VREG@ .            ENDOF
-        17 OF ." V8:" $8 VREG@ .            ENDOF
-        18 OF ." V9:" $9 VREG@ .            ENDOF
-        19 OF ." VA:" $A VREG@ .            ENDOF
-        20 OF ." VB:" $B VREG@ .            ENDOF
-        21 OF ." VC:" $C VREG@ .            ENDOF
-        22 OF ." VD:" $D VREG@ .            ENDOF
-        23 OF ." VE:" $E VREG@ .            ENDOF
-        24 OF ." VF:" $F VREG@ .            ENDOF
-        25 OF ." "                          ENDOF
-        26 OF ." "                          ENDOF
+        9  OF S" V0:"   OUT_BUFFER! $0 VREG@    OUT_BUFFER_U!   ENDOF
+        10 OF S" V1:"   OUT_BUFFER! $1 VREG@    OUT_BUFFER_U!   ENDOF
+        11 OF S" V2:"   OUT_BUFFER! $2 VREG@    OUT_BUFFER_U!   ENDOF
+        12 OF S" V3:"   OUT_BUFFER! $3 VREG@    OUT_BUFFER_U!   ENDOF
+        13 OF S" V4:"   OUT_BUFFER! $4 VREG@    OUT_BUFFER_U!   ENDOF
+        14 OF S" V5:"   OUT_BUFFER! $5 VREG@    OUT_BUFFER_U!   ENDOF
+        15 OF S" V6:"   OUT_BUFFER! $6 VREG@    OUT_BUFFER_U!   ENDOF
+        16 OF S" V7:"   OUT_BUFFER! $7 VREG@    OUT_BUFFER_U!   ENDOF
+        17 OF S" V8:"   OUT_BUFFER! $8 VREG@    OUT_BUFFER_U!   ENDOF
+        18 OF S" V9:"   OUT_BUFFER! $9 VREG@    OUT_BUFFER_U!   ENDOF
+        19 OF S" VA:"   OUT_BUFFER! $A VREG@    OUT_BUFFER_U!   ENDOF
+        20 OF S" VB:"   OUT_BUFFER! $B VREG@    OUT_BUFFER_U!   ENDOF
+        21 OF S" VC:"   OUT_BUFFER! $C VREG@    OUT_BUFFER_U!   ENDOF
+        22 OF S" VD:"   OUT_BUFFER! $D VREG@    OUT_BUFFER_U!   ENDOF
+        23 OF S" VE:"   OUT_BUFFER! $E VREG@    OUT_BUFFER_U!   ENDOF
+        24 OF S" VF:"   OUT_BUFFER! $F VREG@    OUT_BUFFER_U!   ENDOF
+        25 OF S" "      OUT_BUFFER!                             ENDOF
+        26 OF S" "      OUT_BUFFER!                             ENDOF
 
-        27 OF ." DelayTimer:" DelayTimer@ . ENDOF
-        28 OF ." SoundTimer:" SoundTimer@ . ENDOF
-        29 OF ." "                          ENDOF
-        30 OF ." ** STACK **"               ENDOF
+        27 OF S" DelayTimer:"   OUT_BUFFER! DelayTimer@ OUT_BUFFER_U!   ENDOF
+        28 OF S" SoundTimer:"   OUT_BUFFER! SoundTimer@ OUT_BUFFER_U!   ENDOF
+        29 OF S" "              OUT_BUFFER!                             ENDOF
+        30 OF S" ** STACK **"   OUT_BUFFER!                             ENDOF
 
-        31 OF ." STACK:"   .S               ENDOF
+        31 OF S" STACK:"        OUT_BUFFER!             OUT_BUFFER_S!   ENDOF
     ENDCASE
 ;
 
 : print_screen
-    27 EMIT ." [H"
+    OUT_BUFFER_RESET
+
+    27 OUT_BUFFER_C!        \ 27 EMIT
+    S" [H" OUT_BUFFER!      \ move cursor to begin
+
     32 0 DO
-        CR
+        10 OUT_BUFFER_C!    \ \n
+
+        27 OUT_BUFFER_C!    \ 27 EMIT
+        S" [K" OUT_BUFFER!  \ EOF
+
         64 0 DO
             J I PIXEL@ DUP
-            $00 = IF ."   " THEN
-            $FF = IF ." ██" THEN
+            $00 = IF S"   " OUT_BUFFER! THEN
+            $FF = IF S" ██" OUT_BUFFER! THEN
         LOOP
-        5 SPACES I print_register
+
+        S"      " OUT_BUFFER! \ 5 SPACES
+        I print_register
     LOOP
+
+    OUT_BUFFER OUT_BUFFER_LEN TYPE
 ;
 
 : main_loop
