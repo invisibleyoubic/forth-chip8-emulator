@@ -1,4 +1,5 @@
-require test/ttester.fs
+REQUIRE test/ttester.fs
+INCLUDE emulator.fth
 
 VARIABLE TESTS
 VARIABLE FAILURES

@@ -1074,9 +1074,3 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
 
     CLOSE-FILE THROW        \ empty
 ;
-
-RAM_MEMORY 4096 0 FILL
-load_sprites
-NEXT-ARG load_rom
-INS_00E0
-main_loop
