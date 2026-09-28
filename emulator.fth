@@ -456,18 +456,21 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
     ELSE
         0 $F VREG!
     THEN
-    - SWAP C!
+    - $FF AND SWAP C!
 ;
 
 \ SHR - Vx = Vx SHR 1
+\ If the least-significant bit of Vx is 1, 
+\ then VF is set to 1, otherwise 0
+\ Then Vx is divided by 2
 : INS_8xy6 ( x y -- )
     X VREG DUP C@
-    DUP %0001 AND IF
+    DUP $1 AND IF
         1 $F VREG!
     ELSE
         0 $F VREG!
     THEN
-    1 RSHIFT SWAP C!
+    1 RSHIFT $FF AND SWAP C!
 ;
 
 \ SUBN - Vx = Vy - Vx, VF = NOT borrow
@@ -476,23 +479,26 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
     SWAP
     X VREG DUP C@
     ROT
-    2DUP < IF           \ if Vx > Vy => Vf = 1
-        0 $F VREG!
-    ELSE
+    2DUP < IF           \ if Vy > Vx => Vf = 1
         1 $F VREG!
+    ELSE
+        0 $F VREG!
     THEN
-    SWAP - SWAP !
+    SWAP - $FF AND SWAP C!
 ;
 
 \ SHL - Vx = Vx SHL 1
+\ If the most-significant bit of Vx is 1, 
+\ then VF is set to 1, otherwise to 0
+\ Then Vx is multiplied by 2
 : INS_8xyE ( x y -- )
     X VREG DUP C@
-    DUP %1000 AND IF
+    DUP $80 AND IF
         1 $F VREG!
     ELSE
         0 $F VREG!
     THEN
-    1 LSHIFT SWAP !
+    1 LSHIFT $FF AND SWAP C!
 ;
 
 \ SNE - Skip next instruction if Vx != Vy
