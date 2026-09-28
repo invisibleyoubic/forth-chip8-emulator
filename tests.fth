@@ -541,4 +541,141 @@ T{
 }T
 TEST_END
 
+TEST: test_9xy0_1
+T{
+    $6 $F VREG! $7 $0 VREG! $9F00 exec_opcode
+    PC@ -> $0202
+}T
+TEST_END
+
+TEST: test_9xy0_2
+T{
+    $6 $F VREG! $6 $0 VREG! $9F00 exec_opcode
+    PC@ -> $0200
+}T
+TEST_END
+
+TEST: test_9xy0_3
+T{
+    $6 $F VREG! $7 $0 VREG! $90F0 exec_opcode
+    PC@ -> $0202
+}T
+TEST_END
+
+TEST: test_9xy0_4
+T{
+    $6 $F VREG! $6 $0 VREG! $90F0 exec_opcode
+    PC@ -> $0200
+}T
+TEST_END
+
+TEST: test_Annn
+T{
+    $A123 exec_opcode IREG@ -> $123
+}T
+TEST_END
+
+TEST: test_Bnnn
+T{
+    $10 $0 VREG! $B123 exec_opcode PC@ -> $131
+}T
+TEST_END
+
+\ test_Cxkk
+
+\ test_Dxyn
+
+\ test_Ex9E
+
+\ test_ExA1
+
+TEST: test_Fx07
+T{
+    $23 DelayTimer!
+    $F507 exec_opcode
+    $5 VREG@ -> $23
+}T
+TEST_END
+
+\ test_Fx0A
+
+TEST: test_Fx15
+T{
+    $23 $5 VREG!
+    $F515 exec_opcode
+    DelayTimer@ -> $23
+}T
+TEST_END
+
+TEST: test_Fx18
+T{
+    $26 $6 VREG!
+    $F618 exec_opcode
+    SoundTimer@ -> $26
+}T
+TEST_END
+
+TEST: test_Fx1E
+T{
+    $15 IREG!
+    $26 $A VREG!
+    $FA1E exec_opcode
+    IREG@ -> $26 $15 +
+}T
+TEST_END
+
+\ TODO
+\ TEST: test_Fx29
+\ T{
+\     $1 -> $0
+\ }T
+\ TEST_END
+
+TEST: test_Fx33_1
+T{
+    234 $B VREG!
+    $FB33 exec_opcode
+    IREG DUP 0 + C@
+    SWAP DUP 1 + C@
+    SWAP DUP 2 + C@
+    SWAP DROP -> 2 3 4
+}T
+TEST_END
+
+TEST: test_Fx33_2
+T{
+    067 $B VREG!
+    $FB33 exec_opcode
+    IREG DUP 0 + C@
+    SWAP DUP 1 + C@
+    SWAP DUP 2 + C@
+    SWAP DROP -> 0 6 7
+}T
+TEST_END
+
+TEST: test_Fx33_3
+T{
+    240 $B VREG!
+    $FB33 exec_opcode
+    IREG DUP 0 + C@
+    SWAP DUP 1 + C@
+    SWAP DUP 2 + C@
+    SWAP DROP -> 2 4 0
+}T
+TEST_END
+
+\ TODO:;
+\ TEST: test_Fx55
+\ T{
+\     $1 -> $0
+\ }T
+\ TEST_END
+
+\ TODO:
+\ TEST: test_Fx65
+\ T{
+\     $1 -> $0
+\ }T
+\ TEST_END
+
 TEST_SUMMARY
