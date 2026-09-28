@@ -655,8 +655,7 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
 
 \ LD [I] Vx - Store registers V0 through Vx in memory starting at location I
 : INS_Fx55
-    X
-    DUP 1+ 0 DO
+    X 1+ 0 DO
         I VREG@
         IREG@ I + RAM!
     LOOP
@@ -664,8 +663,7 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
 
 \ LD Vx [I] - Read registers V0 through Vx from memory starting at location I
 : INS_Fx65
-    X
-    DUP 1+ 0 DO
+    X 1+ 0 DO
         IREG@ I + RAM@
         I VREG!
     LOOP
