@@ -10,13 +10,14 @@ $200  CONSTANT ROM_START
 64    CONSTANT DISPLAY_WIDTH
 16384 CONSTANT OUT_BUFFER_SIZE
 16    CONSTANT KEY_COUNT
+50    CONSTANT KEY_HOLD_TICKS
 
 \ KEYBOARD
 \ Original layout   My layout
-\   1 2 3 C         Q W E R
-\   4 5 6 D         A S D F
-\   7 8 9 E         Y U I O
-\   A 0 B F         H J K L
+\   1 2 3 C         7 8 9 C
+\   4 5 6 D         4 5 6 D
+\   7 8 9 E         1 2 3 E
+\   A 0 B F         A 0 B F
 \ I guess I will change it (~)(~)
 
 CREATE KEY_STATE KEY_COUNT ALLOT
@@ -49,6 +50,7 @@ VARIABLE VF
 
 VARIABLE DelayTimer
 VARIABLE SoundTimer
+2VARIABLE LAST_TIMER_TICK
 
 \ FULL RAM MEMORY OF CHIP
 \ 0x000 - 0x1FF interpreter memory
@@ -283,7 +285,7 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
     KEY_STATE KEY_COUNT ERASE
 ;
 
-: KEY! ( 0/1 key -- )
+: KEY! ( state key -- )
     KEY_STATE + C!
 ;
 
@@ -297,38 +299,81 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
 
 : ASCII>KEY ( char -- key true/false )
     CASE
-        [CHAR] q OF $1 TRUE ENDOF
-        [CHAR] w OF $2 TRUE ENDOF
-        [CHAR] e OF $3 TRUE ENDOF
-        [CHAR] r OF $C TRUE ENDOF
+        [CHAR] 7 OF $1 TRUE ENDOF
+        [CHAR] 8 OF $2 TRUE ENDOF
+        [CHAR] 9 OF $3 TRUE ENDOF
+        [CHAR] c OF $C TRUE ENDOF
 
-        [CHAR] a OF $4 TRUE ENDOF
-        [CHAR] s OF $5 TRUE ENDOF
-        [CHAR] d OF $6 TRUE ENDOF
-        [CHAR] f OF $D TRUE ENDOF
+        [CHAR] 4 OF $4 TRUE ENDOF
+        [CHAR] 5 OF $5 TRUE ENDOF
+        [CHAR] 6 OF $6 TRUE ENDOF
+        [CHAR] d OF $D TRUE ENDOF
 
-        [CHAR] y OF $7 TRUE ENDOF
-        [CHAR] u OF $8 TRUE ENDOF
-        [CHAR] i OF $9 TRUE ENDOF
-        [CHAR] o OF $E TRUE ENDOF
+        [CHAR] 1 OF $7 TRUE ENDOF
+        [CHAR] 2 OF $8 TRUE ENDOF
+        [CHAR] 3 OF $9 TRUE ENDOF
+        [CHAR] e OF $E TRUE ENDOF
 
-        [CHAR] h OF $A TRUE ENDOF
-        [CHAR] j OF $0 TRUE ENDOF
-        [CHAR] k OF $B TRUE ENDOF
-        [CHAR] l OF $F TRUE ENDOF
+        [CHAR] a OF $A TRUE ENDOF
+        [CHAR] 0 OF $0 TRUE ENDOF
+        [CHAR] b OF $B TRUE ENDOF
+        [CHAR] f OF $F TRUE ENDOF
 
         FALSE SWAP
     ENDCASE
 ;
 
+: KEY_PRESS ( key -- )
+    KEY_HOLD_TICKS SWAP KEY!
+;
+
 : POLL_KEYS ( -- )
-    KEY_RESET
     BEGIN
         KEY?
     WHILE
         KEY ASCII>KEY
-        IF 1 SWAP KEY! THEN
+        IF
+            KEY_PRESS
+        THEN
     REPEAT
+;
+
+: TICK_KEYS ( -- )
+    KEY_COUNT 0 DO
+        I KEY@ ?DUP IF
+            1- I KEY!
+        THEN
+    LOOP
+;
+
+: TIMERS_TICK ( -- )
+    DelayTimer@ DUP 0 <> IF
+        1 - DelayTimer!
+    ELSE
+        DROP
+    THEN
+
+    SoundTimer@ DUP 0 <> IF
+        1 - SoundTimer!
+    ELSE
+        DROP
+    THEN
+;
+
+: INIT_TIMER_CLOCK ( -- )
+    UTIME LAST_TIMER_TICK 2!
+;
+
+: UPDATE_TIMERS ( -- )
+    UTIME
+    LAST_TIMER_TICK 2@
+    D-
+
+    TICK_KEYS
+    16667 S>D D< IF
+        TIMERS_TICK
+        UTIME LAST_TIMER_TICK 2!
+    THEN
 ;
 
 \ INSTRUCTIONS
@@ -573,6 +618,7 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
     X KEY
     ASCII>KEY DROP
     SWAP VREG!
+    INIT_TIMER_CLOCK
 ;
 
 \ LD DT Vx - Set delay timer = Vx
@@ -910,13 +956,14 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
 
 : main_loop
     \ start from firts byte of ROM
-    ROM_START PC ! 
+    ROM_START PC !
+    INIT_TIMER_CLOCK
+    KEY_RESET
     HEX
     BEGIN
         PC @ get_opcode
 
-        \ TODO: do something with controls
-        5 MS
+        3 MS
         POLL_KEYS
 
         \ PAGE
@@ -926,19 +973,11 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
         \ CR ." DEBUG: Press to continue" CR
         \ KEY DROP
 
-        \ TODO: implement timer
-        DelayTimer@
-        DUP 0 <> IF
-            16 MS
-            1 - DelayTimer!
-        ELSE
-            DROP
-        THEN
+        UPDATE_TIMERS
 
         exec_opcode
         NEXT_INS!
     AGAIN
-    DECIMAL
 ;
 
 \ Probably it is not original sprites
