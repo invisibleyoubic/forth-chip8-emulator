@@ -319,7 +319,7 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
         [CHAR] b OF $B TRUE ENDOF
         [CHAR] f OF $F TRUE ENDOF
 
-        FALSE SWAP
+        FALSE FALSE SWAP
     ENDCASE
 ;
 
@@ -370,7 +370,7 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
     D-
 
     TICK_KEYS
-    16667 S>D D< IF
+    16667 S>D D> IF
         TIMERS_TICK
         UTIME LAST_TIMER_TICK 2!
     THEN
@@ -648,9 +648,14 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
     10 /MOD  \ ones , tens-hundreds
     10 /MOD  \ ones , tens , hundreds
 
-    IREG     C!
-    IREG 1 + C!
-    IREG 2 + C!
+    \ I'm not sure
+    \ IREG     C!
+    \ IREG 1 + C!
+    \ IREG 2 + C!
+
+    IREG@     RAM!
+    IREG@ 1 + RAM!
+    IREG@ 2 + RAM!
 ;
 
 \ LD [I] Vx - Store registers V0 through Vx in memory starting at location I
@@ -667,7 +672,6 @@ VARIABLE OUT_BUFFER_PTR OUT_BUFFER
         IREG@ I + RAM@
         I VREG!
     LOOP
-    DROP
 ;
 
 : CALL_0 ( params -- )

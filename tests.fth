@@ -625,42 +625,76 @@ T{
 TEST_END
 
 \ TODO
-\ TEST: test_Fx29
+TEST: test_Fx29
+T{
+    $1 -> $0
+}T
+TEST_END
+
+\ I'm not sure
+\ TEST: test_Fx33_1
 \ T{
-\     $1 -> $0
+\     234 $B VREG!
+\     $FB33 exec_opcode
+\     IREG DUP 0 + C@
+\     SWAP DUP 1 + C@
+\     SWAP DUP 2 + C@
+\     SWAP DROP -> 2 3 4
+\ }T
+\ TEST_END
+
+\ TEST: test_Fx33_2
+\ T{
+\     067 $B VREG!
+\     $FB33 exec_opcode
+\     IREG DUP 0 + C@
+\     SWAP DUP 1 + C@
+\     SWAP DUP 2 + C@
+\     SWAP DROP -> 0 6 7
+\ }T
+\ TEST_END
+
+\ TEST: test_Fx33_3
+\ T{
+\     240 $B VREG!
+\     $FB33 exec_opcode
+\     IREG DUP 0 + C@
+\     SWAP DUP 1 + C@
+\     SWAP DUP 2 + C@
+\     SWAP DROP -> 2 4 0
 \ }T
 \ TEST_END
 
 TEST: test_Fx33_1
 T{
     234 $B VREG!
+    $300 IREG!
     $FB33 exec_opcode
-    IREG DUP 0 + C@
-    SWAP DUP 1 + C@
-    SWAP DUP 2 + C@
-    SWAP DROP -> 2 3 4
+    RAM_MEMORY $300 + C@
+    RAM_MEMORY $301 + C@
+    RAM_MEMORY $302 + C@ -> 2 3 4
 }T
 TEST_END
 
 TEST: test_Fx33_2
 T{
     067 $B VREG!
+    $300 IREG!
     $FB33 exec_opcode
-    IREG DUP 0 + C@
-    SWAP DUP 1 + C@
-    SWAP DUP 2 + C@
-    SWAP DROP -> 0 6 7
+    RAM_MEMORY $300 + C@
+    RAM_MEMORY $301 + C@
+    RAM_MEMORY $302 + C@ -> 0 6 7
 }T
 TEST_END
 
 TEST: test_Fx33_3
 T{
     240 $B VREG!
+    $300 IREG!
     $FB33 exec_opcode
-    IREG DUP 0 + C@
-    SWAP DUP 1 + C@
-    SWAP DUP 2 + C@
-    SWAP DROP -> 2 4 0
+    RAM_MEMORY $300 + C@
+    RAM_MEMORY $301 + C@
+    RAM_MEMORY $302 + C@ -> 2 4 0
 }T
 TEST_END
 
